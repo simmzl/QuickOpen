@@ -1,0 +1,400 @@
+import AppKit
+import Carbon
+
+/// 类似 ⌘Tab 的速查面板：在屏幕中央列出所有已设置快捷键的 App。
+///
+/// - 按住模式：按住修饰键期间显示；按住时连按触发键（如 Space）依次选择，
+///   松开修饰键时若有选中项则打开它，否则直接关闭。
+/// - 切换模式：再按一次快捷键或 Esc 关闭；←→↑↓/⇥ 选择，↩ 打开。
+/// - 任何模式下：按某个 App 自己的快捷键或点击图标都会打开它并关闭面板。
+final class OverviewPanelController {
+    /// 用户在面板里选择了一个 App。
+    var onLaunch: ((AppShortcut) -> Void)?
+    /// 判断 App 是否正在运行（显示小圆点）。
+    var isRunning: ((AppShortcut) -> Bool)?
+
+    let panel = OverlayPanel(cornerRadius: 22)
+    private let overlayKeys = GlobalHotKeyManager(signature: GlobalHotKeyManager.overlaySignature)
+    private var tiles: [OverviewTile] = []
+    private var items: [AppShortcut] = []
+    private var columns = 1
+    private var selectedIndex: Int? { didSet { updateSelection() } }
+
+    private var activeMode: OverviewMode = .toggle
+    private var triggerHotKey: HotKey?
+    /// 触发键当前是否处于按下状态，用于过滤按住不放时的重复事件。
+    private var triggerKeyIsDown = false
+    private var modifierTimer: Timer?
+    private var mouseMonitor: Any?
+    private var shownAt = Date.distantPast
+    private weak var footerLabel: NSTextField?
+    /// 按住模式下短于此时长的轻按，会让面板转为常驻（切换模式）。
+    private static let quickTapInterval: TimeInterval = 0.35
+
+    private static let tileSize = NSSize(width: 124, height: 146)
+    private static let padding: CGFloat = 22
+    private static let headerHeight: CGFloat = 34
+    private static let footerHeight: CGFloat = 30
+
+    /// 面板处于显示状态（不含淡出过程）。
+    private(set) var isVisible = false
+
+    // MARK: 触发
+
+    /// 速查面板快捷键被按下。
+    func hotKeyPressed(
+        shortcuts: [AppShortcut],
+        hotKey: HotKey,
+        mode: OverviewMode
+    ) {
+        if isVisible {
+            guard !triggerKeyIsDown else { return } // 按住不放产生的重复事件
+            triggerKeyIsDown = true
+            switch activeMode {
+            case .hold:
+                advanceSelection(by: 1)
+            case .toggle:
+                dismiss()
+            }
+            return
+        }
+        triggerKeyIsDown = true
+        show(shortcuts: shortcuts, mode: mode, triggerHotKey: hotKey)
+    }
+
+    func hotKeyReleased() {
+        triggerKeyIsDown = false
+    }
+
+    /// 显示面板。从菜单打开时修饰键并未按住，应使用 `.toggle`。
+    func show(shortcuts: [AppShortcut], mode: OverviewMode, triggerHotKey: HotKey?) {
+        items = shortcuts.filter { $0.hotKey != nil }
+        activeMode = triggerHotKey == nil ? .toggle : mode
+        self.triggerHotKey = triggerHotKey
+        selectedIndex = nil
+
+        buildContent()
+        guard let screen = OverlayPanel.activeScreen else { return }
+        let size = contentSize(maxWidth: screen.visibleFrame.width - 80)
+        let visible = screen.visibleFrame
+        panel.setFrame(
+            NSRect(
+                x: round(visible.midX - size.width / 2),
+                y: round(visible.midY - size.height / 2 + visible.height * 0.06),
+                width: size.width,
+                height: size.height
+            ),
+            display: true
+        )
+
+        shownAt = Date()
+        isVisible = true
+        panel.alphaValue = 0
+        panel.orderFrontRegardless()
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = OverlayPanel.reduceMotion ? 0.08 : 0.12
+            panel.animator().alphaValue = 1
+        }
+
+        installInteraction()
+    }
+
+    func dismiss() {
+        guard isVisible else { return }
+        isVisible = false
+        removeInteraction()
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.1
+            panel.animator().alphaValue = 0
+        }, completionHandler: { [weak self] in
+            guard let self, !self.isVisible else { return }
+            self.panel.orderOut(nil)
+        })
+    }
+
+    // MARK: 交互
+
+    private func installInteraction() {
+        removeInteraction()
+
+        if activeMode == .hold, let triggerHotKey {
+            let required = triggerHotKey.modifierFlags
+            // 读取 NSEvent.modifierFlags 不需要辅助功能权限。
+            let timer = Timer(timeInterval: 0.03, repeats: true) { [weak self] _ in
+                let current = NSEvent.modifierFlags.intersection(.deviceIndependentFlagsMask)
+                if !current.isSuperset(of: required) { self?.modifiersReleased() }
+            }
+            RunLoop.main.add(timer, forMode: .common)
+            modifierTimer = timer
+        } else {
+            registerToggleModeKeys()
+        }
+
+        // 点击面板以外的地方关闭。监听全局鼠标事件不需要辅助功能权限。
+        mouseMonitor = NSEvent.addGlobalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        ) { [weak self] _ in
+            self?.dismiss()
+        }
+    }
+
+    private func removeInteraction() {
+        modifierTimer?.invalidate()
+        modifierTimer = nil
+        if let mouseMonitor { NSEvent.removeMonitor(mouseMonitor) }
+        mouseMonitor = nil
+        overlayKeys.unregisterAll()
+        triggerKeyIsDown = false
+    }
+
+    private func modifiersReleased() {
+        if selectedIndex == nil, Date().timeIntervalSince(shownAt) < Self.quickTapInterval {
+            // 轻按一下：保持显示，改用切换模式的操作方式。
+            activeMode = .toggle
+            installInteraction()
+            footerLabel?.stringValue = footerText()
+            return
+        }
+        let selected = selectedIndex.flatMap { items.indices.contains($0) ? items[$0] : nil }
+        dismiss()
+        if let selected { onLaunch?(selected) }
+    }
+
+    /// 切换模式下临时接管 Esc、方向键、Tab 与回车；面板关闭后立即归还。
+    private func registerToggleModeKeys() {
+        let bindings: [(UInt32, UInt32, () -> Void)] = [
+            (53, 0, { [weak self] in self?.dismiss() }),
+            (123, 0, { [weak self] in self?.advanceSelection(by: -1) }),
+            (124, 0, { [weak self] in self?.advanceSelection(by: 1) }),
+            (126, 0, { [weak self] in self?.moveSelectionVertically(by: -1) }),
+            (125, 0, { [weak self] in self?.moveSelectionVertically(by: 1) }),
+            (48, 0, { [weak self] in self?.advanceSelection(by: 1) }),
+            (48, UInt32(shiftKey), { [weak self] in self?.advanceSelection(by: -1) }),
+            (36, 0, { [weak self] in self?.launchSelection() }),
+            (76, 0, { [weak self] in self?.launchSelection() })
+        ]
+        for (keyCode, modifiers, action) in bindings {
+            overlayKeys.register(id: UUID(), hotKey: HotKey(keyCode: keyCode, modifiers: modifiers), action: action)
+        }
+    }
+
+    private func advanceSelection(by delta: Int) {
+        guard !items.isEmpty else { return }
+        guard let current = selectedIndex else {
+            selectedIndex = delta >= 0 ? 0 : items.count - 1
+            return
+        }
+        selectedIndex = (current + delta + items.count) % items.count
+    }
+
+    private func moveSelectionVertically(by rows: Int) {
+        guard !items.isEmpty else { return }
+        guard let current = selectedIndex else {
+            selectedIndex = 0
+            return
+        }
+        let target = current + rows * columns
+        if items.indices.contains(target) { selectedIndex = target }
+    }
+
+    private func launchSelection() {
+        guard let index = selectedIndex, items.indices.contains(index) else { return }
+        let item = items[index]
+        dismiss()
+        onLaunch?(item)
+    }
+
+    private func updateSelection() {
+        for (index, tile) in tiles.enumerated() {
+            tile.isSelected = index == selectedIndex
+        }
+    }
+
+    // MARK: 布局
+
+    private func contentSize(maxWidth: CGFloat) -> NSSize {
+        let tile = Self.tileSize
+        guard !items.isEmpty else { return NSSize(width: 360, height: 180) }
+        let preferred = items.count > 24 ? 8 : 6
+        let fitting = max(1, Int((maxWidth - Self.padding * 2) / tile.width))
+        columns = max(1, min(items.count, preferred, fitting))
+        let rows = Int(ceil(Double(items.count) / Double(columns)))
+        let width = CGFloat(columns) * tile.width + Self.padding * 2
+        let height = CGFloat(rows) * tile.height + Self.padding * 2 + Self.headerHeight + Self.footerHeight
+        return NSSize(width: max(width, 320), height: height)
+    }
+
+    private func buildContent() {
+        let content = panel.effectView
+        content.subviews.forEach { $0.removeFromSuperview() }
+        tiles = []
+
+        let title = NSTextField(labelWithString: "QuickOpen 快捷键")
+        title.font = .systemFont(ofSize: 13, weight: .semibold)
+        title.textColor = .secondaryLabelColor
+
+        let footer = NSTextField(labelWithString: footerText())
+        footer.font = .systemFont(ofSize: 11)
+        footer.textColor = .tertiaryLabelColor
+        footer.lineBreakMode = .byTruncatingTail
+        footer.alignment = .center
+        footerLabel = footer
+
+        [title, footer].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+            content.addSubview($0)
+        }
+
+        var constraints = [
+            title.centerXAnchor.constraint(equalTo: content.centerXAnchor),
+            title.topAnchor.constraint(equalTo: content.topAnchor, constant: Self.padding - 4),
+            footer.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: Self.padding),
+            footer.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -Self.padding),
+            footer.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -(Self.padding - 6))
+        ]
+
+        if items.isEmpty {
+            let empty = NSTextField(labelWithString: "还没有为任何 App 设置快捷键\n在菜单栏 ⌘ 图标 ›「快捷键设置…」中添加")
+            empty.alignment = .center
+            empty.font = .systemFont(ofSize: 13)
+            empty.textColor = .secondaryLabelColor
+            empty.maximumNumberOfLines = 2
+            empty.translatesAutoresizingMaskIntoConstraints = false
+            content.addSubview(empty)
+            constraints += [
+                empty.centerXAnchor.constraint(equalTo: content.centerXAnchor),
+                empty.centerYAnchor.constraint(equalTo: content.centerYAnchor)
+            ]
+        }
+        NSLayoutConstraint.activate(constraints)
+
+        // 预先计算列数，再按网格摆放（使用 frame 布局，数量多时更快）。
+        _ = contentSize(maxWidth: (OverlayPanel.activeScreen?.visibleFrame.width ?? 1440) - 80)
+        let tileSize = Self.tileSize
+        let rows = Int(ceil(Double(items.count) / Double(max(columns, 1))))
+        let gridHeight = CGFloat(rows) * tileSize.height
+        let gridTop = Self.padding + Self.footerHeight + gridHeight // 距底部
+        for (index, item) in items.enumerated() {
+            let row = index / columns
+            let column = index % columns
+            // 最后一行不满时居中。
+            let itemsInRow = min(columns, items.count - row * columns)
+            let rowOffset = CGFloat(columns - itemsInRow) * tileSize.width / 2
+            let origin = NSPoint(
+                x: Self.padding + rowOffset + CGFloat(column) * tileSize.width,
+                y: gridTop - CGFloat(row + 1) * tileSize.height
+            )
+            let tile = OverviewTile(shortcut: item, isRunning: isRunning?(item) ?? false)
+            tile.frame = NSRect(origin: origin, size: tileSize)
+            tile.onClick = { [weak self] in
+                self?.dismiss()
+                self?.onLaunch?(item)
+            }
+            tile.onHover = { [weak self] in self?.selectedIndex = index }
+            content.addSubview(tile)
+            tiles.append(tile)
+        }
+    }
+
+    private func footerText() -> String {
+        guard !items.isEmpty else { return "按 Esc 关闭" }
+        switch activeMode {
+        case .hold:
+            let modifiers = triggerHotKey.map { HotKeyFormatter.keyCaps(for: $0).dropLast().joined() } ?? ""
+            let key = triggerHotKey.map { HotKeyFormatter.keyName(for: $0.keyCode) } ?? ""
+            return "按住 \(modifiers) 连按 \(key) 选择 · 松开打开 · 轻按一下则常驻"
+        case .toggle:
+            return "方向键选择 · ↩ 打开 · Esc 关闭"
+        }
+    }
+}
+
+/// 面板中的单个 App：图标、名称、键帽、运行中圆点。
+private final class OverviewTile: NSView {
+    var onClick: (() -> Void)?
+    var onHover: (() -> Void)?
+    var isSelected = false { didSet { needsDisplay = true } }
+
+    private let iconView = NSImageView()
+    private let nameLabel = NSTextField(labelWithString: "")
+    private let keyCaps: KeyCapView
+    private let runningDot = NSView()
+
+    init(shortcut: AppShortcut, isRunning: Bool) {
+        keyCaps = KeyCapView(hotKey: shortcut.hotKey, style: .overlay, fontSize: 11)
+        super.init(frame: .zero)
+        wantsLayer = true
+
+        let icon = NSWorkspace.shared.icon(forFile: shortcut.appPath)
+        icon.size = NSSize(width: 128, height: 128)
+        iconView.image = icon
+        iconView.imageScaling = .scaleProportionallyUpOrDown
+
+        nameLabel.stringValue = shortcut.appName
+        nameLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        nameLabel.alignment = .center
+        nameLabel.lineBreakMode = .byTruncatingTail
+        nameLabel.maximumNumberOfLines = 1
+
+        runningDot.wantsLayer = true
+        runningDot.layer?.backgroundColor = NSColor.labelColor.withAlphaComponent(0.55).cgColor
+        runningDot.layer?.cornerRadius = 2
+        runningDot.isHidden = !isRunning
+        runningDot.toolTip = "正在运行"
+
+        [iconView, nameLabel, keyCaps, runningDot].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+            addSubview($0)
+        }
+        NSLayoutConstraint.activate([
+            iconView.topAnchor.constraint(equalTo: topAnchor, constant: 12),
+            iconView.centerXAnchor.constraint(equalTo: centerXAnchor),
+            iconView.widthAnchor.constraint(equalToConstant: 64),
+            iconView.heightAnchor.constraint(equalToConstant: 64),
+            runningDot.topAnchor.constraint(equalTo: iconView.bottomAnchor, constant: 3),
+            runningDot.centerXAnchor.constraint(equalTo: centerXAnchor),
+            runningDot.widthAnchor.constraint(equalToConstant: 4),
+            runningDot.heightAnchor.constraint(equalToConstant: 4),
+            nameLabel.topAnchor.constraint(equalTo: iconView.bottomAnchor, constant: 11),
+            nameLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+            nameLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+            keyCaps.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 7),
+            keyCaps.centerXAnchor.constraint(equalTo: centerXAnchor),
+            keyCaps.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -8)
+        ])
+        setAccessibilityRole(.button)
+        setAccessibilityLabel("\(shortcut.appName) \(shortcut.hotKey?.displayString ?? "")")
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard isSelected else { return }
+        let rect = bounds.insetBy(dx: 5, dy: 4)
+        let path = NSBezierPath(roundedRect: rect, xRadius: 14, yRadius: 14)
+        let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        (isDark ? NSColor.white.withAlphaComponent(0.14) : NSColor.black.withAlphaComponent(0.08)).setFill()
+        path.fill()
+    }
+
+    // 面板不会成为 key window，必须接受首次点击。
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func mouseDown(with event: NSEvent) {}
+
+    override func mouseUp(with event: NSEvent) {
+        if bounds.contains(convert(event.locationInWindow, from: nil)) { onClick?() }
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self
+        ))
+    }
+
+    override func mouseEntered(with event: NSEvent) { onHover?() }
+}

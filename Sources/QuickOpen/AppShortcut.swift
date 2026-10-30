@@ -24,6 +24,19 @@ struct HotKey: Codable, Equatable, Hashable {
         103, 111, 105, 107, 113, 106, 64, 79, 80, 90
     ]
 
+    /// 默认的速查面板快捷键：⌃⌥Space。
+    static let defaultOverview = HotKey(keyCode: 49, modifiers: UInt32(controlKey | optionKey))
+
+    /// 仅修饰键部分对应的 NSEvent 标志，用于“按住显示”模式检测松开。
+    var modifierFlags: NSEvent.ModifierFlags {
+        var flags: NSEvent.ModifierFlags = []
+        if modifiers & UInt32(controlKey) != 0 { flags.insert(.control) }
+        if modifiers & UInt32(optionKey) != 0 { flags.insert(.option) }
+        if modifiers & UInt32(shiftKey) != 0 { flags.insert(.shift) }
+        if modifiers & UInt32(cmdKey) != 0 { flags.insert(.command) }
+        return flags
+    }
+
     static func validate(keyCode: UInt32, modifiers: UInt32) -> HotKeyValidation {
         if modifiers == 0 { return .needsModifier }
         if modifiers == UInt32(shiftKey), !functionKeyCodes.contains(keyCode) { return .shiftOnly }
@@ -79,12 +92,21 @@ enum HotKeyFormatter {
     ]
 
     static func displayString(for hotKey: HotKey) -> String {
-        var result = ""
-        if hotKey.modifiers & UInt32(controlKey) != 0 { result += "⌃" }
-        if hotKey.modifiers & UInt32(optionKey) != 0 { result += "⌥" }
-        if hotKey.modifiers & UInt32(shiftKey) != 0 { result += "⇧" }
-        if hotKey.modifiers & UInt32(cmdKey) != 0 { result += "⌘" }
-        result += keyNames[hotKey.keyCode] ?? "Key\(hotKey.keyCode)"
+        keyCaps(for: hotKey).joined()
+    }
+
+    /// 拆分成一颗颗键帽，按 macOS 标准顺序：⌃ ⌥ ⇧ ⌘ 键。
+    static func keyCaps(for hotKey: HotKey) -> [String] {
+        var result: [String] = []
+        if hotKey.modifiers & UInt32(controlKey) != 0 { result.append("⌃") }
+        if hotKey.modifiers & UInt32(optionKey) != 0 { result.append("⌥") }
+        if hotKey.modifiers & UInt32(shiftKey) != 0 { result.append("⇧") }
+        if hotKey.modifiers & UInt32(cmdKey) != 0 { result.append("⌘") }
+        result.append(keyName(for: hotKey.keyCode))
         return result
+    }
+
+    static func keyName(for keyCode: UInt32) -> String {
+        keyNames[keyCode] ?? "Key\(keyCode)"
     }
 }

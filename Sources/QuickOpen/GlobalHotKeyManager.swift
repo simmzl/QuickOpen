@@ -7,24 +7,33 @@ private let quickOpenHotKeyHandler: EventHandlerUPP = { _, event, userData in
     return manager.handle(event: event)
 }
 
+/// 基于 Carbon `RegisterEventHotKey` 的全局热键，不需要辅助功能权限。
+/// 每个实例使用独立的 signature，可以同时存在多组互不干扰的热键。
 final class GlobalHotKeyManager {
-    private static let signature: OSType = 0x516B4F70 // "QkOp"
+    static let appSignature: OSType = 0x516B4F70     // "QkOp"：App 快捷键与速查面板
+    static let overlaySignature: OSType = 0x516B4F76 // "QkOv"：浮层显示期间的临时按键
 
+    private let signature: OSType
     private var eventHandler: EventHandlerRef?
     private var hotKeyRefs: [UUID: EventHotKeyRef] = [:]
     private var actions: [UInt32: () -> Void] = [:]
+    private var releaseActions: [UInt32: () -> Void] = [:]
+    private var numericIDs: [UUID: UInt32] = [:]
     private var nextNumericID: UInt32 = 1
 
-    init() {
-        var eventType = EventTypeSpec(
-            eventClass: OSType(kEventClassKeyboard),
-            eventKind: UInt32(kEventHotKeyPressed)
-        )
+    var isEmpty: Bool { hotKeyRefs.isEmpty }
+
+    init(signature: OSType = GlobalHotKeyManager.appSignature) {
+        self.signature = signature
+        var eventTypes = [
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed)),
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyReleased))
+        ]
         let status = InstallEventHandler(
             GetApplicationEventTarget(),
             quickOpenHotKeyHandler,
-            1,
-            &eventType,
+            eventTypes.count,
+            &eventTypes,
             Unmanaged.passUnretained(self).toOpaque(),
             &eventHandler
         )
@@ -39,14 +48,17 @@ final class GlobalHotKeyManager {
     }
 
     @discardableResult
-    func register(id: UUID, hotKey: HotKey, action: @escaping () -> Void) -> OSStatus {
-        if let existing = hotKeyRefs.removeValue(forKey: id) {
-            UnregisterEventHotKey(existing)
-        }
+    func register(
+        id: UUID,
+        hotKey: HotKey,
+        onRelease: (() -> Void)? = nil,
+        action: @escaping () -> Void
+    ) -> OSStatus {
+        unregister(id: id)
 
         let numericID = nextNumericID
         nextNumericID &+= 1
-        let identifier = EventHotKeyID(signature: Self.signature, id: numericID)
+        let identifier = EventHotKeyID(signature: signature, id: numericID)
         var reference: EventHotKeyRef?
         let status = RegisterEventHotKey(
             hotKey.keyCode,
@@ -60,14 +72,28 @@ final class GlobalHotKeyManager {
         if status == noErr, let reference {
             hotKeyRefs[id] = reference
             actions[numericID] = action
+            if let onRelease { releaseActions[numericID] = onRelease }
+            numericIDs[id] = numericID
         }
         return status
+    }
+
+    func unregister(id: UUID) {
+        if let existing = hotKeyRefs.removeValue(forKey: id) {
+            UnregisterEventHotKey(existing)
+        }
+        if let numericID = numericIDs.removeValue(forKey: id) {
+            actions.removeValue(forKey: numericID)
+            releaseActions.removeValue(forKey: numericID)
+        }
     }
 
     func unregisterAll() {
         hotKeyRefs.values.forEach { UnregisterEventHotKey($0) }
         hotKeyRefs.removeAll()
         actions.removeAll()
+        releaseActions.removeAll()
+        numericIDs.removeAll()
     }
 
     fileprivate func handle(event: EventRef) -> OSStatus {
@@ -81,9 +107,15 @@ final class GlobalHotKeyManager {
             nil,
             &identifier
         )
-        guard status == noErr, identifier.signature == Self.signature else { return status }
-        guard let action = actions[identifier.id] else { return OSStatus(eventNotHandledErr) }
-        action()
+        // 不属于本实例的事件必须返回 eventNotHandledErr，让其他 handler 继续处理。
+        guard status == noErr, identifier.signature == signature else { return OSStatus(eventNotHandledErr) }
+        let isRelease = GetEventKind(event) == UInt32(kEventHotKeyReleased)
+        let table = isRelease ? releaseActions : actions
+        guard let action = table[identifier.id] else {
+            return actions[identifier.id] == nil ? OSStatus(eventNotHandledErr) : noErr
+        }
+        // 派发到下一轮 runloop，避免在 Carbon 回调中修改热键注册表。
+        DispatchQueue.main.async(execute: action)
         return noErr
     }
 }

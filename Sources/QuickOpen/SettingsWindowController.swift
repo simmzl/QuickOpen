@@ -1,441 +1,137 @@
 import AppKit
-import Carbon
-import UniformTypeIdentifiers
 
-private final class AppCellView: NSTableCellView {
-    let nameLabel = NSTextField(labelWithString: "")
-    let pathLabel = NSTextField(labelWithString: "")
-    let appIconView = NSImageView()
+/// 系统设置风格的工具栏分页窗口：「快捷键」「通用」。
+final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate {
+    private enum Tab: String, CaseIterable {
+        case shortcuts
+        case general
 
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-
-        nameLabel.font = .systemFont(ofSize: 13, weight: .medium)
-        nameLabel.lineBreakMode = .byTruncatingTail
-        pathLabel.font = .systemFont(ofSize: 10)
-        pathLabel.textColor = .secondaryLabelColor
-        pathLabel.lineBreakMode = .byTruncatingMiddle
-        appIconView.imageScaling = .scaleProportionallyUpOrDown
-
-        [nameLabel, pathLabel, appIconView].forEach {
-            $0.translatesAutoresizingMaskIntoConstraints = false
-            addSubview($0)
+        var title: String {
+            switch self {
+            case .shortcuts: return "快捷键"
+            case .general: return "通用"
+            }
         }
 
-        NSLayoutConstraint.activate([
-            appIconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            appIconView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            appIconView.widthAnchor.constraint(equalToConstant: 30),
-            appIconView.heightAnchor.constraint(equalToConstant: 30),
-            nameLabel.leadingAnchor.constraint(equalTo: appIconView.trailingAnchor, constant: 10),
-            nameLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
-            nameLabel.bottomAnchor.constraint(equalTo: centerYAnchor, constant: -1),
-            pathLabel.leadingAnchor.constraint(equalTo: nameLabel.leadingAnchor),
-            pathLabel.trailingAnchor.constraint(equalTo: nameLabel.trailingAnchor),
-            pathLabel.topAnchor.constraint(equalTo: centerYAnchor, constant: 2)
-        ])
+        var symbol: String {
+            switch self {
+            case .shortcuts: return "command.square"
+            case .general: return "gearshape"
+            }
+        }
+
+        var identifier: NSToolbarItem.Identifier { .init(rawValue) }
     }
 
-    required init?(coder: NSCoder) { nil }
-}
+    let context: SettingsContext
+    private let shortcutsController: ShortcutsViewController
+    private let generalController: GeneralViewController
+    private var currentTab: Tab = .shortcuts
+    private static let contentSize = NSSize(width: 660, height: 500)
 
-private final class ShortcutButton: NSButton {
-    var shortcutID: UUID?
-}
-
-private final class DeleteButton: NSButton {
-    var shortcutID: UUID?
-}
-
-final class SettingsWindowController: NSWindowController, NSTableViewDataSource, NSTableViewDelegate, NSWindowDelegate {
-    private let store: ShortcutStore
-    private let hotKeyManager: GlobalHotKeyManager
-    private let onShortcutsChanged: () -> [UUID: OSStatus]
-
-    private let tableView = NSTableView()
-    private let emptyLabel = NSTextField(labelWithString: "还没有添加 App\n点击下方按钮开始设置")
-    private let hintLabel = NSTextField(labelWithString: "快捷键需包含 ⌘、⌥ 或 ⌃ · 可拖动排序")
-    private var recordingID: UUID?
-    private var recordingMonitor: Any?
-    private static let rowDragType = NSPasteboard.PasteboardType("com.simmzl.quickopen.row")
-
-    /// 注册失败的快捷键，用于在列表中标红提示。
-    var registrationFailures: [UUID: OSStatus] = [:] {
-        didSet { tableView.reloadData() }
+    var onShowOverview: (() -> Void)? {
+        get { generalController.onShowOverview }
+        set { generalController.onShowOverview = newValue }
     }
 
-    init(
-        store: ShortcutStore,
-        hotKeyManager: GlobalHotKeyManager,
-        onShortcutsChanged: @escaping () -> [UUID: OSStatus]
-    ) {
-        self.store = store
-        self.hotKeyManager = hotKeyManager
-        self.onShortcutsChanged = onShortcutsChanged
+    init(context: SettingsContext) {
+        self.context = context
+        shortcutsController = ShortcutsViewController(context: context)
+        generalController = GeneralViewController(context: context)
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 640, height: 450),
+            contentRect: NSRect(origin: .zero, size: Self.contentSize),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
         )
-        window.title = "QuickOpen 设置"
         window.isReleasedWhenClosed = false
-        window.center()
-        window.minSize = NSSize(width: 560, height: 380)
-
+        window.toolbarStyle = .preference
+        window.titleVisibility = .visible
         super.init(window: window)
         window.delegate = self
-        buildInterface()
+
+        let toolbar = NSToolbar(identifier: "QuickOpenSettings")
+        toolbar.delegate = self
+        toolbar.displayMode = .iconAndLabel
+        toolbar.allowsUserCustomization = false
+        toolbar.selectedItemIdentifier = Tab.shortcuts.identifier
+        window.toolbar = toolbar
+
+        select(.shortcuts)
+        window.center()
     }
 
     required init?(coder: NSCoder) { nil }
 
-    func present() {
-        tableView.reloadData()
-        updateEmptyState()
+    func present(tab: String? = nil) {
+        if let tab, let target = Tab(rawValue: tab) { select(target) }
+        shortcutsController.refresh()
+        generalController.refresh()
         showWindow(nil)
         AppLauncher.activateSelf()
         window?.orderFrontRegardless()
         window?.makeKey()
     }
 
-    func numberOfRows(in tableView: NSTableView) -> Int {
-        store.shortcuts.count
+    func showGeneralTab() { present(tab: Tab.general.rawValue) }
+
+    private func select(_ tab: Tab) {
+        guard let window else { return }
+        context.cancelRecording()
+        currentTab = tab
+        window.toolbar?.selectedItemIdentifier = tab.identifier
+        window.title = tab.title
+        let controller: NSViewController = tab == .shortcuts ? shortcutsController : generalController
+        // 保持窗口左上角位置与尺寸不变，仅替换内容。
+        let frame = window.frame
+        window.contentViewController = controller
+        window.setContentSize(Self.contentSize)
+        window.setFrameTopLeftPoint(NSPoint(x: frame.minX, y: frame.maxY))
     }
 
-    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        guard store.shortcuts.indices.contains(row), let identifier = tableColumn?.identifier else { return nil }
-        let shortcut = store.shortcuts[row]
-
-        switch identifier.rawValue {
-        case "application":
-            let cell = tableView.makeView(withIdentifier: identifier, owner: self) as? AppCellView
-                ?? AppCellView(frame: .zero)
-            cell.identifier = identifier
-            cell.nameLabel.stringValue = shortcut.appName
-            cell.pathLabel.stringValue = shortcut.bundleIdentifier ?? shortcut.appPath
-            cell.appIconView.image = NSWorkspace.shared.icon(forFile: shortcut.appPath)
-            return cell
-
-        case "hotkey":
-            let button = tableView.makeView(withIdentifier: identifier, owner: self) as? ShortcutButton
-                ?? ShortcutButton(title: "", target: self, action: #selector(recordShortcut(_:)))
-            button.identifier = identifier
-            button.target = self
-            button.action = #selector(recordShortcut(_:))
-            button.shortcutID = shortcut.id
-            button.bezelStyle = .rounded
-            button.controlSize = .regular
-            button.font = .monospacedSystemFont(ofSize: 13, weight: .medium)
-            if recordingID == shortcut.id {
-                button.title = "请按快捷键…"
-                button.contentTintColor = nil
-                button.toolTip = nil
-            } else if let status = registrationFailures[shortcut.id], let hotKey = shortcut.hotKey {
-                button.title = "⚠︎ \(hotKey.displayString)"
-                button.contentTintColor = .systemRed
-                button.toolTip = status == eventHotKeyExistsErr
-                    ? "该快捷键已被系统或其他应用占用，点击重新录制"
-                    : "无法注册该快捷键（错误码 \(status)），点击重新录制"
-            } else {
-                button.title = shortcut.hotKey?.displayString ?? "录制"
-                button.contentTintColor = nil
-                button.toolTip = nil
-            }
-            return button
-
-        case "delete":
-            let deleteImage = NSImage(systemSymbolName: "trash", accessibilityDescription: "删除")
-                ?? NSImage(size: NSSize(width: 16, height: 16))
-            let button = tableView.makeView(withIdentifier: identifier, owner: self) as? DeleteButton
-                ?? DeleteButton(
-                    image: deleteImage,
-                    target: self,
-                    action: #selector(deleteShortcut(_:))
-                )
-            button.identifier = identifier
-            button.target = self
-            button.action = #selector(deleteShortcut(_:))
-            button.shortcutID = shortcut.id
-            button.bezelStyle = .inline
-            button.isBordered = false
-            button.contentTintColor = .secondaryLabelColor
-            button.toolTip = "删除 \(shortcut.appName)"
-            return button
-
-        default:
-            return nil
-        }
+    @objc private func toolbarItemSelected(_ sender: NSToolbarItem) {
+        guard let tab = Tab(rawValue: sender.itemIdentifier.rawValue), tab != currentTab else { return }
+        select(tab)
     }
+
+    // MARK: NSWindowDelegate
 
     func windowWillClose(_ notification: Notification) {
-        if recordingID != nil { finishRecording(shouldReregister: true) }
+        context.cancelRecording()
     }
 
     /// 录制期间所有热键都已注销；窗口一旦失焦就结束录制并恢复热键。
-    /// 打开的 sheet（如警告框）也会让窗口失焦，但录制此时已结束，不受影响。
+    /// 打开 sheet（如添加 App 面板）时窗口也会失焦，此时没有在录制，不受影响。
     func windowDidResignKey(_ notification: Notification) {
-        if recordingID != nil { finishRecording(shouldReregister: true) }
+        context.cancelRecording()
     }
 
-    // MARK: 拖拽排序
+    // MARK: NSToolbarDelegate
 
-    func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
-        guard recordingID == nil else { return nil }
-        let item = NSPasteboardItem()
-        item.setString(String(row), forType: Self.rowDragType)
+    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        Tab.allCases.map(\.identifier)
+    }
+
+    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        Tab.allCases.map(\.identifier)
+    }
+
+    func toolbarSelectableItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        Tab.allCases.map(\.identifier)
+    }
+
+    func toolbar(
+        _ toolbar: NSToolbar,
+        itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
+        willBeInsertedIntoToolbar flag: Bool
+    ) -> NSToolbarItem? {
+        guard let tab = Tab(rawValue: itemIdentifier.rawValue) else { return nil }
+        let item = NSToolbarItem(itemIdentifier: itemIdentifier)
+        item.label = tab.title
+        item.image = NSImage(systemSymbolName: tab.symbol, accessibilityDescription: tab.title)
+        item.target = self
+        item.action = #selector(toolbarItemSelected(_:))
         return item
-    }
-
-    func tableView(
-        _ tableView: NSTableView,
-        validateDrop info: NSDraggingInfo,
-        proposedRow row: Int,
-        proposedDropOperation dropOperation: NSTableView.DropOperation
-    ) -> NSDragOperation {
-        guard info.draggingSource as? NSTableView === tableView else { return [] }
-        tableView.setDropRow(row, dropOperation: .above)
-        return .move
-    }
-
-    func tableView(
-        _ tableView: NSTableView,
-        acceptDrop info: NSDraggingInfo,
-        row: Int,
-        dropOperation: NSTableView.DropOperation
-    ) -> Bool {
-        guard let raw = info.draggingPasteboard.pasteboardItems?.first?.string(forType: Self.rowDragType),
-              let source = Int(raw) else { return false }
-        store.move(from: source, to: row)
-        tableView.reloadData()
-        _ = onShortcutsChanged()
-        return true
-    }
-
-    private func buildInterface() {
-        guard let contentView = window?.contentView else { return }
-
-        let titleLabel = NSTextField(labelWithString: "App 快捷键")
-        titleLabel.font = .systemFont(ofSize: 22, weight: .semibold)
-        let subtitleLabel = NSTextField(labelWithString: "按下全局快捷键，让目标 App 立即来到前台；未运行时会自动启动。")
-        subtitleLabel.font = .systemFont(ofSize: 12)
-        subtitleLabel.textColor = .secondaryLabelColor
-
-        let header = NSStackView(views: [titleLabel, subtitleLabel])
-        header.orientation = .vertical
-        header.alignment = .leading
-        header.spacing = 4
-
-        let applicationColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("application"))
-        applicationColumn.title = "App"
-        applicationColumn.minWidth = 260
-        applicationColumn.resizingMask = .autoresizingMask
-        let hotKeyColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("hotkey"))
-        hotKeyColumn.title = "快捷键"
-        hotKeyColumn.width = 150
-        hotKeyColumn.minWidth = 130
-        hotKeyColumn.maxWidth = 180
-        hotKeyColumn.resizingMask = .userResizingMask
-        let deleteColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("delete"))
-        deleteColumn.title = ""
-        deleteColumn.width = 42
-        deleteColumn.minWidth = 42
-        deleteColumn.maxWidth = 42
-        deleteColumn.resizingMask = []
-
-        [applicationColumn, hotKeyColumn, deleteColumn].forEach(tableView.addTableColumn)
-        tableView.headerView = nil
-        tableView.rowHeight = 52
-        tableView.intercellSpacing = NSSize(width: 0, height: 1)
-        tableView.usesAlternatingRowBackgroundColors = true
-        tableView.selectionHighlightStyle = .none
-        tableView.dataSource = self
-        tableView.delegate = self
-        tableView.registerForDraggedTypes([Self.rowDragType])
-        tableView.draggingDestinationFeedbackStyle = .gap
-        tableView.setDraggingSourceOperationMask(.move, forLocal: true)
-
-        let scrollView = NSScrollView()
-        scrollView.documentView = tableView
-        scrollView.hasVerticalScroller = true
-        scrollView.autohidesScrollers = true
-        scrollView.drawsBackground = true
-        scrollView.borderType = .bezelBorder
-
-        let addButton = NSButton(title: "添加 App…", target: self, action: #selector(addApplication))
-        addButton.bezelStyle = .rounded
-        addButton.image = NSImage(systemSymbolName: "plus", accessibilityDescription: nil)
-        addButton.imagePosition = .imageLeading
-
-        hintLabel.font = .systemFont(ofSize: 11)
-        hintLabel.textColor = .secondaryLabelColor
-        hintLabel.lineBreakMode = .byTruncatingTail
-
-        let spacer = NSView()
-        let footer = NSStackView(views: [addButton, spacer, hintLabel])
-        footer.orientation = .horizontal
-        footer.alignment = .centerY
-        footer.spacing = 10
-        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        hintLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-
-        emptyLabel.alignment = .center
-        emptyLabel.font = .systemFont(ofSize: 13)
-        emptyLabel.textColor = .tertiaryLabelColor
-        emptyLabel.maximumNumberOfLines = 2
-
-        [header, scrollView, footer, emptyLabel].forEach {
-            $0.translatesAutoresizingMaskIntoConstraints = false
-            contentView.addSubview($0)
-        }
-
-        NSLayoutConstraint.activate([
-            header.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 24),
-            header.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            header.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -24),
-            scrollView.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 18),
-            scrollView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            scrollView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            scrollView.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -14),
-            footer.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
-            footer.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
-            footer.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -20),
-            emptyLabel.centerXAnchor.constraint(equalTo: scrollView.centerXAnchor),
-            emptyLabel.centerYAnchor.constraint(equalTo: scrollView.centerYAnchor)
-        ])
-
-        updateEmptyState()
-    }
-
-    @objc private func addApplication() {
-        guard let window else { return }
-        let panel = NSOpenPanel()
-        panel.title = "选择要绑定快捷键的 App"
-        panel.prompt = "添加"
-        panel.directoryURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
-        panel.allowedContentTypes = [.applicationBundle]
-        panel.allowsMultipleSelection = true
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
-        panel.resolvesAliases = true
-
-        panel.beginSheetModal(for: window) { [weak self] response in
-            guard response == .OK, let self else { return }
-            let addedIDs = self.store.addApplications(at: panel.urls)
-            self.tableView.reloadData()
-            self.updateEmptyState()
-            _ = self.onShortcutsChanged()
-
-            if addedIDs.count == 1 {
-                self.beginRecording(id: addedIDs[0])
-            } else if addedIDs.isEmpty, !panel.urls.isEmpty {
-                self.showAlert(message: "没有添加新 App", detail: "所选 App 已经在列表中。")
-            }
-        }
-    }
-
-    @objc private func recordShortcut(_ sender: ShortcutButton) {
-        guard let id = sender.shortcutID else { return }
-        beginRecording(id: id)
-    }
-
-    @objc private func deleteShortcut(_ sender: DeleteButton) {
-        guard let id = sender.shortcutID else { return }
-        if recordingID == id { finishRecording(shouldReregister: false) }
-        store.remove(id: id)
-        tableView.reloadData()
-        updateEmptyState()
-        _ = onShortcutsChanged()
-    }
-
-    private func beginRecording(id: UUID) {
-        if recordingID != nil { finishRecording(shouldReregister: false) }
-        recordingID = id
-        hotKeyManager.unregisterAll()
-        hintLabel.stringValue = "按下新快捷键 · Esc 取消 · Delete 清除"
-        hintLabel.textColor = .controlAccentColor
-        tableView.reloadData()
-
-        recordingMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            self?.capture(event)
-            return nil
-        }
-    }
-
-    private func capture(_ event: NSEvent) {
-        guard let id = recordingID else { return }
-
-        if event.keyCode == 53 {
-            finishRecording(shouldReregister: true)
-            return
-        }
-
-        let carbonModifiers = HotKey.carbonModifiers(from: event.modifierFlags)
-        if (event.keyCode == 51 || event.keyCode == 117), carbonModifiers == 0 {
-            finishRecording(shouldReregister: false)
-            store.updateHotKey(nil, for: id)
-            _ = onShortcutsChanged()
-            return
-        }
-
-        switch HotKey.validate(keyCode: UInt32(event.keyCode), modifiers: carbonModifiers) {
-        case .valid:
-            break
-        case .needsModifier:
-            NSSound.beep()
-            hintLabel.stringValue = "请同时按住 ⌘、⌥ 或 ⌃ 中的至少一个"
-            return
-        case .shiftOnly:
-            NSSound.beep()
-            hintLabel.stringValue = "⇧ 需与 ⌘、⌥ 或 ⌃ 组合使用，否则会影响正常打字"
-            return
-        }
-
-        let hotKey = HotKey(keyCode: UInt32(event.keyCode), modifiers: carbonModifiers)
-        guard !store.uses(hotKey, excluding: id) else {
-            NSSound.beep()
-            hintLabel.stringValue = "这个快捷键已经分配给列表中的其他 App"
-            return
-        }
-
-        let previousHotKey = store.shortcut(id: id)?.hotKey
-        finishRecording(shouldReregister: false)
-        store.updateHotKey(hotKey, for: id)
-        let failures = onShortcutsChanged()
-
-        if let status = failures[id] {
-            store.updateHotKey(previousHotKey, for: id)
-            _ = onShortcutsChanged()
-            let detail = status == eventHotKeyExistsErr
-                ? "该快捷键已被系统或其他应用占用，请换一个。"
-                : "系统无法注册该快捷键（错误码 \(status)）。"
-            showAlert(message: "快捷键不可用", detail: detail)
-        }
-        tableView.reloadData()
-    }
-
-    private func finishRecording(shouldReregister: Bool) {
-        if let recordingMonitor {
-            NSEvent.removeMonitor(recordingMonitor)
-            self.recordingMonitor = nil
-        }
-        recordingID = nil
-        hintLabel.stringValue = "快捷键需包含 ⌘、⌥ 或 ⌃ · 可拖动排序"
-        hintLabel.textColor = .secondaryLabelColor
-        tableView.reloadData()
-        if shouldReregister { _ = onShortcutsChanged() }
-    }
-
-    private func updateEmptyState() {
-        emptyLabel.isHidden = !store.shortcuts.isEmpty
-    }
-
-    private func showAlert(message: String, detail: String) {
-        let alert = NSAlert()
-        alert.messageText = message
-        alert.informativeText = detail
-        alert.alertStyle = .warning
-        if let window { alert.beginSheetModal(for: window) }
     }
 }
