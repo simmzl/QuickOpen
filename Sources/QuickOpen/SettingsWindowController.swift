@@ -54,9 +54,15 @@ final class SettingsWindowController: NSWindowController, NSTableViewDataSource,
 
     private let tableView = NSTableView()
     private let emptyLabel = NSTextField(labelWithString: "还没有添加 App\n点击下方按钮开始设置")
-    private let hintLabel = NSTextField(labelWithString: "快捷键至少需要包含 ⌘、⌥、⌃ 或 ⇧ 中的一个")
+    private let hintLabel = NSTextField(labelWithString: "快捷键需包含 ⌘、⌥ 或 ⌃ · 可拖动排序")
     private var recordingID: UUID?
     private var recordingMonitor: Any?
+    private static let rowDragType = NSPasteboard.PasteboardType("com.simmzl.quickopen.row")
+
+    /// 注册失败的快捷键，用于在列表中标红提示。
+    var registrationFailures: [UUID: OSStatus] = [:] {
+        didSet { tableView.reloadData() }
+    }
 
     init(
         store: ShortcutStore,
@@ -89,7 +95,7 @@ final class SettingsWindowController: NSWindowController, NSTableViewDataSource,
         tableView.reloadData()
         updateEmptyState()
         showWindow(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        AppLauncher.activateSelf()
         window?.orderFrontRegardless()
         window?.makeKey()
     }
@@ -124,8 +130,18 @@ final class SettingsWindowController: NSWindowController, NSTableViewDataSource,
             button.font = .monospacedSystemFont(ofSize: 13, weight: .medium)
             if recordingID == shortcut.id {
                 button.title = "请按快捷键…"
+                button.contentTintColor = nil
+                button.toolTip = nil
+            } else if let status = registrationFailures[shortcut.id], let hotKey = shortcut.hotKey {
+                button.title = "⚠︎ \(hotKey.displayString)"
+                button.contentTintColor = .systemRed
+                button.toolTip = status == eventHotKeyExistsErr
+                    ? "该快捷键已被系统或其他应用占用，点击重新录制"
+                    : "无法注册该快捷键（错误码 \(status)），点击重新录制"
             } else {
                 button.title = shortcut.hotKey?.displayString ?? "录制"
+                button.contentTintColor = nil
+                button.toolTip = nil
             }
             return button
 
@@ -154,7 +170,47 @@ final class SettingsWindowController: NSWindowController, NSTableViewDataSource,
     }
 
     func windowWillClose(_ notification: Notification) {
-        finishRecording(shouldReregister: true)
+        if recordingID != nil { finishRecording(shouldReregister: true) }
+    }
+
+    /// 录制期间所有热键都已注销；窗口一旦失焦就结束录制并恢复热键。
+    /// 打开的 sheet（如警告框）也会让窗口失焦，但录制此时已结束，不受影响。
+    func windowDidResignKey(_ notification: Notification) {
+        if recordingID != nil { finishRecording(shouldReregister: true) }
+    }
+
+    // MARK: 拖拽排序
+
+    func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
+        guard recordingID == nil else { return nil }
+        let item = NSPasteboardItem()
+        item.setString(String(row), forType: Self.rowDragType)
+        return item
+    }
+
+    func tableView(
+        _ tableView: NSTableView,
+        validateDrop info: NSDraggingInfo,
+        proposedRow row: Int,
+        proposedDropOperation dropOperation: NSTableView.DropOperation
+    ) -> NSDragOperation {
+        guard info.draggingSource as? NSTableView === tableView else { return [] }
+        tableView.setDropRow(row, dropOperation: .above)
+        return .move
+    }
+
+    func tableView(
+        _ tableView: NSTableView,
+        acceptDrop info: NSDraggingInfo,
+        row: Int,
+        dropOperation: NSTableView.DropOperation
+    ) -> Bool {
+        guard let raw = info.draggingPasteboard.pasteboardItems?.first?.string(forType: Self.rowDragType),
+              let source = Int(raw) else { return false }
+        store.move(from: source, to: row)
+        tableView.reloadData()
+        _ = onShortcutsChanged()
+        return true
     }
 
     private func buildInterface() {
@@ -196,6 +252,9 @@ final class SettingsWindowController: NSWindowController, NSTableViewDataSource,
         tableView.selectionHighlightStyle = .none
         tableView.dataSource = self
         tableView.delegate = self
+        tableView.registerForDraggedTypes([Self.rowDragType])
+        tableView.draggingDestinationFeedbackStyle = .gap
+        tableView.setDraggingSourceOperationMask(.move, forLocal: true)
 
         let scrollView = NSScrollView()
         scrollView.documentView = tableView
@@ -320,9 +379,16 @@ final class SettingsWindowController: NSWindowController, NSTableViewDataSource,
             return
         }
 
-        guard carbonModifiers != 0 else {
+        switch HotKey.validate(keyCode: UInt32(event.keyCode), modifiers: carbonModifiers) {
+        case .valid:
+            break
+        case .needsModifier:
             NSSound.beep()
-            hintLabel.stringValue = "请同时按住 ⌘、⌥、⌃ 或 ⇧ 中的至少一个"
+            hintLabel.stringValue = "请同时按住 ⌘、⌥ 或 ⌃ 中的至少一个"
+            return
+        case .shiftOnly:
+            NSSound.beep()
+            hintLabel.stringValue = "⇧ 需与 ⌘、⌥ 或 ⌃ 组合使用，否则会影响正常打字"
             return
         }
 
@@ -355,7 +421,7 @@ final class SettingsWindowController: NSWindowController, NSTableViewDataSource,
             self.recordingMonitor = nil
         }
         recordingID = nil
-        hintLabel.stringValue = "快捷键至少需要包含 ⌘、⌥、⌃ 或 ⇧ 中的一个"
+        hintLabel.stringValue = "快捷键需包含 ⌘、⌥ 或 ⌃ · 可拖动排序"
         hintLabel.textColor = .secondaryLabelColor
         tableView.reloadData()
         if shouldReregister { _ = onShortcutsChanged() }

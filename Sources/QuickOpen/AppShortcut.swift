@@ -2,12 +2,32 @@ import AppKit
 import Carbon
 import Foundation
 
+enum HotKeyValidation: Equatable {
+    case valid
+    /// 没有任何修饰键。
+    case needsModifier
+    /// 只有 ⇧ 加普通键，会吃掉正常的大写输入。
+    case shiftOnly
+}
+
 struct HotKey: Codable, Equatable, Hashable {
     let keyCode: UInt32
     let modifiers: UInt32
 
     var displayString: String {
         HotKeyFormatter.displayString(for: self)
+    }
+
+    /// F1–F20 的虚拟键码。这些键不产生字符，允许仅与 ⇧ 组合。
+    static let functionKeyCodes: Set<UInt32> = [
+        122, 120, 99, 118, 96, 97, 98, 100, 101, 109,
+        103, 111, 105, 107, 113, 106, 64, 79, 80, 90
+    ]
+
+    static func validate(keyCode: UInt32, modifiers: UInt32) -> HotKeyValidation {
+        if modifiers == 0 { return .needsModifier }
+        if modifiers == UInt32(shiftKey), !functionKeyCodes.contains(keyCode) { return .shiftOnly }
+        return .valid
     }
 
     static func carbonModifiers(from flags: NSEvent.ModifierFlags) -> UInt32 {

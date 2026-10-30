@@ -6,7 +6,15 @@ final class ShortcutStore {
     private let encoder: JSONEncoder
     private let decoder = JSONDecoder()
 
-    init(baseDirectory: URL? = nil) {
+    /// 配置文件损坏时备份到的路径（如有）。
+    private(set) var corruptedBackupURL: URL?
+
+    var configurationURL: URL { fileURL }
+
+    /// - Parameters:
+    ///   - baseDirectory: 存放 shortcuts.json 的目录；nil 表示 ~/Library/Application Support/QuickOpen。
+    ///   - legacyDirectory: 旧版 AppKey 配置所在目录；nil 且使用默认目录时为 Application Support/AppKey。
+    init(baseDirectory: URL? = nil, legacyDirectory: URL? = nil) {
         let applicationSupportDirectory = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let directory = baseDirectory ?? applicationSupportDirectory
@@ -14,8 +22,13 @@ final class ShortcutStore {
         fileURL = directory.appendingPathComponent("shortcuts.json")
         encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        if baseDirectory == nil {
-            migrateLegacyConfigurationIfNeeded(from: applicationSupportDirectory)
+
+        let legacy = legacyDirectory
+            ?? (baseDirectory == nil
+                ? applicationSupportDirectory.appendingPathComponent("AppKey", isDirectory: true)
+                : nil)
+        if let legacy {
+            migrateLegacyConfigurationIfNeeded(from: legacy)
         }
         load()
     }
@@ -65,6 +78,17 @@ final class ShortcutStore {
         save()
     }
 
+    /// 把 `source` 位置的条目移动到 `destination`（NSTableView 拖拽语义：插入到该行之前）。
+    func move(from source: Int, to destination: Int) {
+        guard shortcuts.indices.contains(source),
+              (0...shortcuts.count).contains(destination) else { return }
+        let target = destination > source ? destination - 1 : destination
+        guard target != source else { return }
+        let item = shortcuts.remove(at: source)
+        shortcuts.insert(item, at: target)
+        save()
+    }
+
     func shortcut(id: UUID) -> AppShortcut? {
         shortcuts.first { $0.id == id }
     }
@@ -79,6 +103,25 @@ final class ShortcutStore {
             shortcuts = try decoder.decode([AppShortcut].self, from: data)
         } catch {
             NSLog("QuickOpen: failed to decode shortcuts: %@", error.localizedDescription)
+            backUpCorruptedConfiguration()
+        }
+    }
+
+    /// 解析失败时把原文件改名保留，避免后续 save() 覆盖用户数据。
+    private func backUpCorruptedConfiguration() {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        let backupURL = fileURL.deletingLastPathComponent()
+            .appendingPathComponent("shortcuts.corrupted-\(formatter.string(from: Date())).json")
+        do {
+            if FileManager.default.fileExists(atPath: backupURL.path) {
+                try FileManager.default.removeItem(at: backupURL)
+            }
+            try FileManager.default.moveItem(at: fileURL, to: backupURL)
+            corruptedBackupURL = backupURL
+        } catch {
+            NSLog("QuickOpen: failed to back up corrupted shortcuts: %@", error.localizedDescription)
         }
     }
 
@@ -94,11 +137,9 @@ final class ShortcutStore {
         }
     }
 
-    private func migrateLegacyConfigurationIfNeeded(from applicationSupportDirectory: URL) {
+    private func migrateLegacyConfigurationIfNeeded(from legacyDirectory: URL) {
         guard !FileManager.default.fileExists(atPath: fileURL.path) else { return }
-        let legacyURL = applicationSupportDirectory
-            .appendingPathComponent("AppKey", isDirectory: true)
-            .appendingPathComponent("shortcuts.json")
+        let legacyURL = legacyDirectory.appendingPathComponent("shortcuts.json")
         guard FileManager.default.fileExists(atPath: legacyURL.path) else { return }
 
         do {
