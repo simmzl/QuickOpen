@@ -30,12 +30,18 @@ final class KeyCapView: NSView {
         stack.alignment = .centerY
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
+        // 键帽始终在自身区域内水平居中：外层被拉宽时（如单个键）也不会靠左。
+        let preferTight = stack.widthAnchor.constraint(equalTo: widthAnchor)
+        preferTight.priority = .defaultLow
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: trailingAnchor),
+            stack.centerXAnchor.constraint(equalTo: centerXAnchor),
+            stack.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
+            preferTight,
             stack.topAnchor.constraint(equalTo: topAnchor),
             stack.bottomAnchor.constraint(equalTo: bottomAnchor)
         ])
+        stack.setHuggingPriority(.required, for: .horizontal)
         setContentHuggingPriority(.required, for: .horizontal)
         rebuild()
     }
