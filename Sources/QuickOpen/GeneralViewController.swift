@@ -61,8 +61,13 @@ final class GeneralViewController: NSViewController {
             overviewNote.textColor = .systemRed
         } else if !overviewControl.isRecording {
             overviewControl.isWarning = false
-            overviewNote.stringValue = "一键查看所有 App 的快捷键。点击修改 · Delete 清除 · Esc 取消"
-            overviewNote.textColor = .secondaryLabelColor
+            if let warning = preferences.overviewHotKey?.typingWarning {
+                overviewNote.stringValue = "⚠︎ " + warning
+                overviewNote.textColor = .systemOrange
+            } else {
+                overviewNote.stringValue = "一键查看所有 App 的快捷键。支持单键或组合键 · 点击修改"
+                overviewNote.textColor = .secondaryLabelColor
+            }
         }
         holdRadio.state = preferences.overviewMode == .hold ? .on : .off
         toggleRadio.state = preferences.overviewMode == .toggle ? .on : .off

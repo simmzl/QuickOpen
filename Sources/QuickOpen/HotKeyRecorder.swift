@@ -38,7 +38,7 @@ final class HotKeyRecorder {
         case cancelled
     }
 
-    /// 校验失败时的提示文字回调，例如“⇧ 需与 ⌘、⌥ 或 ⌃ 组合使用”。
+    /// 校验失败时的提示文字回调，例如“这个快捷键已经分配给 Safari”。
     var onRejected: ((String) -> Void)?
     /// 额外校验（例如冲突检测），返回错误文字表示拒绝。
     var validator: ((HotKey) -> String?)?
@@ -79,23 +79,13 @@ final class HotKeyRecorder {
         let modifiers = HotKey.carbonModifiers(from: event.modifierFlags)
         let keyCode = UInt32(event.keyCode)
 
+        // 录制时单独的 Esc / Delete 保留为“取消 / 清除”，其余任何键（含单键）都可录制。
         if keyCode == 53, modifiers == 0 { // Esc
             finish(.cancelled)
             return
         }
         if (keyCode == 51 || keyCode == 117), modifiers == 0 { // Delete / Forward Delete
             finish(.cleared)
-            return
-        }
-
-        switch HotKey.validate(keyCode: keyCode, modifiers: modifiers) {
-        case .valid:
-            break
-        case .needsModifier:
-            reject("请同时按住 ⌘、⌥ 或 ⌃ 中的至少一个")
-            return
-        case .shiftOnly:
-            reject("⇧ 需与 ⌘、⌥ 或 ⌃ 组合使用，否则会影响正常打字")
             return
         }
 

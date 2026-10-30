@@ -4,10 +4,8 @@ import Foundation
 
 enum HotKeyValidation: Equatable {
     case valid
-    /// 没有任何修饰键。
-    case needsModifier
-    /// 只有 ⇧ 加普通键，会吃掉正常的大写输入。
-    case shiftOnly
+    /// 允许使用，但这个键（单键或仅 ⇧）在所有 App 中都会被拦截，无法正常输入。
+    case interferesWithTyping
 }
 
 struct HotKey: Codable, Equatable, Hashable {
@@ -18,7 +16,7 @@ struct HotKey: Codable, Equatable, Hashable {
         HotKeyFormatter.displayString(for: self)
     }
 
-    /// F1–F20 的虚拟键码。这些键不产生字符，允许仅与 ⇧ 组合。
+    /// F1–F20 的虚拟键码。这些键不产生字符，单独使用不影响打字。
     static let functionKeyCodes: Set<UInt32> = [
         122, 120, 99, 118, 96, 97, 98, 100, 101, 109,
         103, 111, 105, 107, 113, 106, 64, 79, 80, 90
@@ -37,10 +35,21 @@ struct HotKey: Codable, Equatable, Hashable {
         return flags
     }
 
+    /// 任何按键都可以作为快捷键（包括不带修饰键的单键），这里只判断是否会影响正常输入。
     static func validate(keyCode: UInt32, modifiers: UInt32) -> HotKeyValidation {
-        if modifiers == 0 { return .needsModifier }
-        if modifiers == UInt32(shiftKey), !functionKeyCodes.contains(keyCode) { return .shiftOnly }
+        let typingModifiersOnly = modifiers == 0 || modifiers == UInt32(shiftKey)
+        if typingModifiersOnly, !functionKeyCodes.contains(keyCode) { return .interferesWithTyping }
         return .valid
+    }
+
+    var interferesWithTyping: Bool {
+        Self.validate(keyCode: keyCode, modifiers: modifiers) == .interferesWithTyping
+    }
+
+    /// 单键提示文字，例如“单键 A 会在所有 App 中被拦截，无法正常输入该键”。
+    var typingWarning: String? {
+        guard interferesWithTyping else { return nil }
+        return "\(displayString) 会在所有 App 中被拦截，无法再正常输入该键"
     }
 
     static func carbonModifiers(from flags: NSEvent.ModifierFlags) -> UInt32 {

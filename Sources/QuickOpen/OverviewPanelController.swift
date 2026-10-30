@@ -5,6 +5,7 @@ import Carbon
 ///
 /// - 按住模式：按住修饰键期间显示；按住时连按触发键（如 Space）依次选择，
 ///   松开修饰键时若有选中项则打开它，否则直接关闭。
+///   快捷键是单键时，按住该键显示，松开关闭。
 /// - 切换模式：再按一次快捷键或 Esc 关闭；←→↑↓/⇥ 选择，↩ 打开。
 /// - 任何模式下：按某个 App 自己的快捷键或点击图标都会打开它并关闭面板。
 final class OverviewPanelController {
@@ -64,6 +65,10 @@ final class OverviewPanelController {
 
     func hotKeyReleased() {
         triggerKeyIsDown = false
+        // 单键快捷键没有可检测的修饰键：按住该键显示，松开即视为“松开”。
+        if isVisible, activeMode == .hold, triggerHotKey?.modifierFlags.isEmpty == true {
+            modifiersReleased()
+        }
     }
 
     /// 显示面板。从菜单打开时修饰键并未按住，应使用 `.toggle`。
@@ -117,7 +122,9 @@ final class OverviewPanelController {
     private func installInteraction() {
         removeInteraction()
 
-        if activeMode == .hold, let triggerHotKey {
+        if activeMode == .hold, let triggerHotKey, triggerHotKey.modifierFlags.isEmpty {
+            // 单键：由 hotKeyReleased() 处理松开，这里不需要轮询修饰键。
+        } else if activeMode == .hold, let triggerHotKey {
             let required = triggerHotKey.modifierFlags
             // 读取 NSEvent.modifierFlags 不需要辅助功能权限。
             let timer = Timer(timeInterval: 0.03, repeats: true) { [weak self] _ in
@@ -302,6 +309,9 @@ final class OverviewPanelController {
         case .hold:
             let modifiers = triggerHotKey.map { HotKeyFormatter.keyCaps(for: $0).dropLast().joined() } ?? ""
             let key = triggerHotKey.map { HotKeyFormatter.keyName(for: $0.keyCode) } ?? ""
+            if modifiers.isEmpty {
+                return "按住 \(key) 显示 · 松开关闭 · 轻按一下则常驻"
+            }
             return "按住 \(modifiers) 连按 \(key) 选择 · 松开打开 · 轻按一下则常驻"
         case .toggle:
             return "方向键选择 · ↩ 打开 · Esc 关闭"

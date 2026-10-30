@@ -9,7 +9,7 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
     private let emptyView = EmptyStateView()
     private let hintLabel = NSTextField(labelWithString: "")
     private static let rowDragType = NSPasteboard.PasteboardType("com.simmzl.quickopen.row")
-    private static let defaultHint = "快捷键需包含 ⌘、⌥ 或 ⌃ · 拖动可排序 · 可把 App 直接拖进来"
+    private static let defaultHint = "支持单键或组合键 · 拖动可排序 · 可把 App 直接拖进来"
 
     init(context: SettingsContext) {
         self.context = context
@@ -400,8 +400,13 @@ private final class ShortcutRowView: NSTableCellView {
             detailLabel.textColor = .systemRed
             hotKeyControl.toolTip = "点击重新录制"
         } else {
-            detailLabel.stringValue = shortcut.bundleIdentifier ?? shortcut.appPath
-            detailLabel.textColor = .secondaryLabelColor
+            if let warning = shortcut.hotKey?.typingWarning {
+                detailLabel.stringValue = "⚠︎ " + warning
+                detailLabel.textColor = .systemOrange
+            } else {
+                detailLabel.stringValue = shortcut.bundleIdentifier ?? shortcut.appPath
+                detailLabel.textColor = .secondaryLabelColor
+            }
             hotKeyControl.toolTip = shortcut.hotKey == nil ? "点击录制快捷键" : "点击修改快捷键"
         }
         if !FileManager.default.fileExists(atPath: shortcut.appPath),
