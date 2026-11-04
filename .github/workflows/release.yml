@@ -83,7 +83,6 @@ jobs:
       - name: Build dmg and zip
         env:
           QUICKOPEN_VERSION: ${{ steps.version.outputs.version }}
-          QUICKOPEN_BUILD_NUMBER: ${{ github.run_number }}
           QUICKOPEN_SKIP_ICON: "1"
           QUICKOPEN_SIGNING_IDENTITY: ${{ steps.signing.outputs.identity }}
           QUICKOPEN_NOTARY_KEY: ${{ steps.notary.outputs.key }}
