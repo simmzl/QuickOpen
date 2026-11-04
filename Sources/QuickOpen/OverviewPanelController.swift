@@ -39,6 +39,8 @@ final class OverviewPanelController {
     private var modifierTimer: DispatchSourceTimer?
     /// 面板为 key 时，修饰键变化作为真实的输入事件送到本 App。
     private var flagsMonitor: Any?
+    /// 有“输入监控”权限时使用：在系统事件流中直接观察修饰键松开，最可靠。
+    private var releaseTap: ModifierReleaseTap?
     /// 面板显示期间持有的“延迟敏感”活动声明：关闭 App Nap 与定时器合并。
     /// 否则后台菜单栏 App 的定时器会被系统推迟，表现为松开按键后面板卡住、动一下鼠标才打开。
     private var latencyActivity: NSObjectProtocol?
@@ -170,7 +172,14 @@ final class OverviewPanelController {
             )
         }
 
-        if state.mode == .hold, let triggerHotKey, !triggerHotKey.modifierFlags.isEmpty {
+        if state.mode == .hold, let triggerHotKey, !triggerHotKey.modifierFlags.isEmpty,
+           let tap = ModifierReleaseTap(required: Self.cgFlags(for: triggerHotKey.modifierFlags), onRelease: { [weak self] in
+               self?.modifiersReleased(source: "tap")
+           }) {
+            // 首选：系统级事件监听（需要“输入监控”权限）。
+            releaseTap = tap
+        } else if state.mode == .hold, let triggerHotKey, !triggerHotKey.modifierFlags.isEmpty {
+            // 没有权限时的兜底：本 App 的 flagsChanged 事件 + 轮询（极少数情况下可能要动一下鼠标）。
             let requiredFlags = triggerHotKey.modifierFlags
             flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
                 let current = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
@@ -205,6 +214,8 @@ final class OverviewPanelController {
         modifierTimer = nil
         if let flagsMonitor { NSEvent.removeMonitor(flagsMonitor) }
         flagsMonitor = nil
+        releaseTap?.invalidate()
+        releaseTap = nil
         if let latencyActivity { ProcessInfo.processInfo.endActivity(latencyActivity) }
         latencyActivity = nil
         if let mouseMonitor { NSEvent.removeMonitor(mouseMonitor) }
@@ -222,7 +233,7 @@ final class OverviewPanelController {
     ///   如果面板不是 key（收不到事件），短暂等待后由轮询兜底结算。
     private func modifiersReleased(source: String) {
         log.debug("modifiers released (\(source, privacy: .public)), key=\(self.panel.isKeyWindow) active=\(NSApp.isActive) front=\(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "-", privacy: .public)")
-        if source == "event" {
+        if source == "event" || source == "tap" {
             modifierTimer?.cancel()
             modifierTimer = nil
             releaseDetectedAt = nil

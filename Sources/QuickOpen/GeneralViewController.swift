@@ -14,6 +14,9 @@ final class GeneralViewController: NSViewController {
     private let overviewNote = NSTextField(labelWithString: "")
     private let holdRadio = NSButton(radioButtonWithTitle: OverviewMode.hold.title, target: nil, action: nil)
     private let toggleRadio = NSButton(radioButtonWithTitle: OverviewMode.toggle.title, target: nil, action: nil)
+    private let permissionNote = NSTextField(labelWithString: "")
+    private let permissionButton = NSButton(title: "", target: nil, action: nil)
+    private let permissionRow = NSStackView()
 
     private let hudCheckbox = NSButton(checkboxWithTitle: L("Show the app icon and shortcut on screen when you use a shortcut", "按下 App 快捷键时，在屏幕上显示 App 图标与快捷键"), target: nil, action: nil)
     private let positionPopup = NSPopUpButton()
@@ -73,6 +76,7 @@ final class GeneralViewController: NSViewController {
         }
         holdRadio.state = preferences.overviewMode == .hold ? .on : .off
         toggleRadio.state = preferences.overviewMode == .toggle ? .on : .off
+        refreshPermission()
 
         hudCheckbox.state = preferences.showsLaunchHUD ? .on : .off
         positionPopup.selectItem(at: HUDPosition.allCases.firstIndex(of: preferences.hudPosition) ?? 0)
@@ -95,6 +99,22 @@ final class GeneralViewController: NSViewController {
         holdRadio.action = #selector(changeMode(_:))
         toggleRadio.target = self
         toggleRadio.action = #selector(changeMode(_:))
+        permissionNote.font = .systemFont(ofSize: 11)
+        permissionNote.lineBreakMode = .byWordWrapping
+        permissionNote.maximumNumberOfLines = 2
+        permissionNote.preferredMaxLayoutWidth = 360
+        permissionButton.applyGlassStyle()
+        permissionButton.controlSize = .small
+        permissionButton.target = self
+        permissionButton.action = #selector(grantPermission)
+        permissionRow.orientation = .horizontal
+        permissionRow.alignment = .centerY
+        permissionRow.spacing = 8
+        permissionRow.setViews([permissionNote, permissionButton], in: .leading)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(appDidBecomeActive),
+            name: NSApplication.didBecomeActiveNotification, object: nil
+        )
         let openOverview = NSButton(title: L("Open Overview", "打开速查面板"), target: self, action: #selector(showOverview))
         openOverview.applyGlassStyle()
 
@@ -142,7 +162,8 @@ final class GeneralViewController: NSViewController {
         let overview = section(L("Overview", "速查面板"), rows: [
             labeled(L("Shortcut", "快捷键"), stack([overviewControl, openOverview], spacing: 10)),
             labeled("", overviewNote),
-            labeled(L("Behavior", "呼出方式"), stack([holdRadio, toggleRadio], vertical: true, spacing: 6))
+            labeled(L("Behavior", "呼出方式"), stack([holdRadio, toggleRadio], vertical: true, spacing: 6)),
+            labeled("", permissionRow)
         ])
 
         let hud = section(L("Launch Hint", "启动提示"), rows: [
@@ -267,6 +288,35 @@ final class GeneralViewController: NSViewController {
 
     @objc private func toggleHide() {
         context.preferences.hidesWhenFrontmost = hideCheckbox.state == .on
+    }
+
+    /// “按住显示”所需的输入监控权限状态。
+    private func refreshPermission() {
+        let needsPermission = context.preferences.overviewMode == .hold
+        permissionRow.isHidden = !needsPermission
+        guard needsPermission else { return }
+        if InputMonitoring.isGranted {
+            permissionNote.stringValue = L("✓ Input Monitoring allowed", "✓ 已允许“输入监控”")
+            permissionNote.textColor = .secondaryLabelColor
+            permissionButton.isHidden = true
+        } else {
+            permissionNote.stringValue = L(
+                "Hold mode needs Input Monitoring to detect when you release the keys.",
+                "“按住显示”需要“输入监控”权限来检测按键松开。"
+            )
+            permissionNote.textColor = .systemOrange
+            permissionButton.title = L("Allow…", "去允许…")
+            permissionButton.isHidden = false
+        }
+    }
+
+    @objc private func grantPermission() {
+        // 第一次会弹出系统提示；之前拒绝过则直接打开系统设置。
+        if !InputMonitoring.request() { InputMonitoring.openSystemSettings() }
+    }
+
+    @objc private func appDidBecomeActive() {
+        refreshPermission()
     }
 
     @objc private func changeMode(_ sender: NSButton) {

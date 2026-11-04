@@ -6,13 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ## [Unreleased]
 
 ### Added
+- Settings → General shows whether Input Monitoring is allowed for the overview's Hold mode, with a button to grant it.
 - English and Simplified Chinese interface. English by default unless the system language is Chinese; switch in Settings → General.
 
 ### Changed
 - Overview (hold mode): removed "tap to keep open". Releasing the modifiers opens the selected app, or closes the panel if nothing is selected. Use toggle mode or the menu bar item to keep the panel open.
 
 ### Fixed
-- Overview (hold mode): after releasing the modifiers the panel could freeze until the mouse moved, especially after pressing `Space` many times. Like `⌘Tab`, QuickOpen now briefly becomes the active app while the overview is shown, so the release arrives as a real key event and activation is handed directly to the chosen app (or back to the previous app if nothing was selected). The panel also closes instantly instead of fading out. `Space` presses still queued at release time are counted.
+- Overview (hold mode): after releasing the modifiers the panel could freeze until the mouse moved, especially after pressing `Space` many times. Hold mode now asks once for **Input Monitoring** and uses a listen-only event tap (modifier keys only, active only while the overview is visible) to detect the release reliably. Like `⌘Tab`, QuickOpen briefly becomes the active app while the overview is shown and hands activation to the chosen app (or back to the previous app if nothing was selected). The panel closes instantly instead of fading out.
 - App icons in the overview and launch hint could appear blank the first time they were shown.
 
 ## [1.3.0] - 2026-11-04

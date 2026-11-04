@@ -38,6 +38,8 @@
 - **Thoughtful details:** conflict detection, warnings for shortcuts taken by other apps, drag to reorder, drag apps in from Finder, launch at login.
 - **Private and light:** no Accessibility permission, no network access, no third-party dependencies. Pure AppKit + Carbon, about 1 MB.
 
+> **About Input Monitoring.** App shortcuts work without any permission. Only the overview's *Hold* mode asks once for **Input Monitoring**, so it can reliably notice when you release `⌃⌥` no matter which app has focus. QuickOpen only listens to modifier-key changes while the overview is on screen and never records what you type. Without it, Hold mode still works but may occasionally wait for a mouse move; *Toggle* mode never needs it.
+
 <p align="center">
   <img src="docs/images/overview-en.png" width="720" alt="Shortcut overview">
 </p>
@@ -137,7 +139,8 @@ Releases are fully automated by GitHub Actions:
 ## How it works
 
 - Global shortcuts use Carbon's `RegisterEventHotKey`, which does not require Accessibility or Input Monitoring permission.
-- Like `⌘Tab`, QuickOpen briefly becomes the active app while the overview is visible, so releasing the modifiers is delivered as a normal key event and activation is handed straight to the chosen app. No keyboard monitoring is involved.
+- Like `⌘Tab`, QuickOpen briefly becomes the active app while the overview is visible and hands activation straight to the chosen app.
+- In Hold mode, a listen-only event tap (`CGEventTap`, modifier changes only) detects the release of `⌃⌥`. It exists only while the overview is visible.
 - Apps are activated through `NSWorkspace.openApplication`, which behaves like clicking the Dock icon.
 
 ## Contributing

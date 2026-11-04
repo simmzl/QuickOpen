@@ -38,6 +38,8 @@
 - **细节完善：** 快捷键冲突检测、被其他 App 占用时提示、拖动排序、从访达直接拖入 App、登录时启动。
 - **私密轻量：** 不需要辅助功能权限，不联网，没有第三方依赖。纯 AppKit + Carbon，约 1 MB。
 
+> **关于“输入监控”权限。** App 快捷键不需要任何权限。只有速查面板的“按住显示”会请求一次 **输入监控** 权限，用来在任何 App 处于前台时都能可靠地检测到 `⌃⌥` 被松开。QuickOpen 只在面板显示期间监听修饰键的变化，不记录任何输入内容。不授权时“按住显示”仍可使用，但偶尔需要动一下鼠标才会打开；“切换显示”完全不需要这个权限。
+
 <p align="center">
   <img src="docs/images/overview-zh.png" width="720" alt="速查面板">
 </p>
@@ -137,7 +139,8 @@ QUICKOPEN_README_IMAGES=1 QUICKOPEN_SNAPSHOT_DIR=/tmp/qo swift test --filter tes
 ## 实现原理
 
 - 全局快捷键使用 Carbon 的 `RegisterEventHotKey`，不需要“辅助功能”或“输入监控”权限。
-- 和 `⌘Tab` 一样，速查面板显示期间 QuickOpen 会短暂成为前台 App，松开修饰键会作为普通按键事件送达，随即把前台直接交给选中的 App；全程不监听键盘输入。
+- “按住显示”通过只读的事件监听（`CGEventTap`，只关注修饰键变化）检测 `⌃⌥` 的松开，仅在速查面板显示期间存在。
+- 和 `⌘Tab` 一样，速查面板显示期间 QuickOpen 会短暂成为前台 App，随即把前台直接交给选中的 App。
 - 通过 `NSWorkspace.openApplication` 激活 App，效果等同点击 Dock 图标。
 
 ## 参与贡献

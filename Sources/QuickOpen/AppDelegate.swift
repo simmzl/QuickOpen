@@ -96,6 +96,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func overviewHotKeyPressed(_ hotKey: HotKey) {
         if !overview.isVisible { hud.dismiss() }
+        // “按住显示”需要输入监控权限才能可靠检测松开；首次使用时请求一次。
+        if preferences.overviewMode == .hold, !hotKey.modifierFlags.isEmpty {
+            InputMonitoring.requestOnceIfNeeded()
+        }
         overview.hotKeyPressed(shortcuts: store.shortcuts, hotKey: hotKey, mode: preferences.overviewMode)
     }
 
