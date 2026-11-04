@@ -20,9 +20,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var settingsWindowController: SettingsWindowController?
     /// 最近一次注册失败的快捷键（id → 错误码）。速查面板使用 `SettingsContext.overviewHotKeyID`。
     private var registrationFailures: [UUID: OSStatus] = [:]
+    /// 全局快捷键工具需要随时即时响应：关闭 App Nap，避免热键回调和定时器被系统推迟。
+    /// App 平时只在 runloop 中空闲等待，不会增加耗电。
+    private var noNapActivity: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        noNapActivity = ProcessInfo.processInfo.beginActivity(
+            options: [.userInitiatedAllowingIdleSystemSleep],
+            reason: "QuickOpen responds to global shortcuts"
+        )
         launcher.hidesWhenFrontmost = preferences.hidesWhenFrontmost
         overview.onLaunch = { [weak self] shortcut in self?.launch(shortcut) }
         overview.isRunning = { [weak self] shortcut in self?.launcher.runningApplication(for: shortcut) != nil }

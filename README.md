@@ -29,7 +29,7 @@
   - Not running? It launches.
   - Already in front? Press again to hide it (optional).
 - **Shortcut overview.** Press `⌃⌥Space` to see every app and its shortcut in a grid at the center of the screen, just like `⌘Tab`.
-  - *Hold mode* (default): hold `⌃⌥`, tap `Space` to move the selection, release to open. A quick tap keeps the panel open.
+  - *Hold mode* (default): hold `⌃⌥`, tap `Space` to move the selection, release to open (or close if nothing is selected).
   - *Toggle mode*: press once to show, again or `Esc` to hide; arrow keys select, `↩` opens.
   - Or simply press any app's shortcut, or click its icon.
 - **Launch hint.** Each time you use a shortcut, the app's icon and keys flash briefly on screen, so shortcuts stick in your memory. Position and duration are adjustable.
@@ -137,7 +137,7 @@ Releases are fully automated by GitHub Actions:
 ## How it works
 
 - Global shortcuts use Carbon's `RegisterEventHotKey`, which does not require Accessibility or Input Monitoring permission.
-- "Hold" mode in the overview reads the current modifier state (`NSEvent.modifierFlags`) instead of monitoring the keyboard.
+- "Hold" mode in the overview polls the current modifier state (`CGEventSource.flagsState`) instead of monitoring the keyboard.
 - Apps are activated through `NSWorkspace.openApplication`, which behaves like clicking the Dock icon.
 
 ## Contributing

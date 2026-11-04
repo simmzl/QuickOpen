@@ -4,32 +4,24 @@ import Foundation
 ///
 /// 按住模式（hold）：
 /// - 按下快捷键显示面板；按住修饰键时每按一次触发键，选中项前进一格。
-/// - 松开修饰键：有选中项则打开它；没有选中项且是一次“轻按”（很快松开）则转为切换模式常驻；
-///   否则直接关闭。
-/// 切换模式（toggle）：再按一次快捷键关闭。
+/// - 松开修饰键：有选中项则打开它，否则关闭面板。
+/// 切换模式（toggle，从菜单打开或在设置中选择）：再按一次快捷键关闭。
 struct OverviewInteraction {
     enum Effect: Equatable {
         case none
         case dismiss
         case launch(index: Int)
-        /// 轻按：面板保持显示，改用切换模式操作。
-        case becomeToggle
     }
 
-    /// 短于此时长且未做任何选择的松开，视为轻按。
-    static let quickTapInterval: TimeInterval = 0.3
-
-    private(set) var mode: OverviewMode
+    let mode: OverviewMode
     private(set) var selection: Int?
     let itemCount: Int
-    let shownAt: TimeInterval
     /// 触发键当前是否按着（过滤按住不放时的重复按下事件）。
     private(set) var triggerIsDown = true
 
-    init(mode: OverviewMode, itemCount: Int, shownAt: TimeInterval) {
+    init(mode: OverviewMode, itemCount: Int) {
         self.mode = mode
         self.itemCount = itemCount
-        self.shownAt = shownAt
     }
 
     /// 面板已显示时，速查面板快捷键再次按下。
@@ -50,14 +42,10 @@ struct OverviewInteraction {
     }
 
     /// 按住模式下修饰键已松开（单键快捷键则为该键松开）。
-    mutating func modifiersReleased(at now: TimeInterval) -> Effect {
+    func modifiersReleased() -> Effect {
         guard mode == .hold else { return .none }
         if let selection, (0..<itemCount).contains(selection) {
             return .launch(index: selection)
-        }
-        if now - shownAt < Self.quickTapInterval {
-            mode = .toggle
-            return .becomeToggle
         }
         return .dismiss
     }

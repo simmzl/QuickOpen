@@ -21,7 +21,7 @@ final class OverviewPanelController {
     private var tiles: [OverviewTile] = []
     private var items: [AppShortcut] = []
     private var columns = 1
-    private var state = OverviewInteraction(mode: .toggle, itemCount: 0, shownAt: 0)
+    private var state = OverviewInteraction(mode: .toggle, itemCount: 0)
 
     var selectedIndex: Int? { state.selection }
 
@@ -32,13 +32,17 @@ final class OverviewPanelController {
     }
 
     private var triggerHotKey: HotKey?
-    private var modifierTimer: Timer?
+    /// 轮询修饰键状态的严格计时器（不允许系统合并或推迟）。
+    private var modifierTimer: DispatchSourceTimer?
+    /// 面板显示期间持有的“延迟敏感”活动声明：关闭 App Nap 与定时器合并。
+    /// 否则后台菜单栏 App 的定时器会被系统推迟，表现为松开按键后面板卡住、动一下鼠标才打开。
+    private var latencyActivity: NSObjectProtocol?
     private var mouseMonitor: Any?
     /// 检测到修饰键松开的时间；在宽限期内到达、且发生在此之前的触发键仍计入选择。
     private var releaseDetectedAt: TimeInterval?
-    private weak var footerLabel: NSTextField?
     /// 修饰键松开后等待排队中的热键事件的宽限期。
-    private static let releaseGrace: TimeInterval = 0.04
+    private static let releaseGrace: TimeInterval = 0.03
+    private static let pollInterval: DispatchTimeInterval = .milliseconds(10)
 
     private static let tileSize = NSSize(width: 124, height: 146)
     private static let padding: CGFloat = 22
@@ -54,7 +58,7 @@ final class OverviewPanelController {
     func hotKeyPressed(shortcuts: [AppShortcut], hotKey: HotKey, mode: OverviewMode) {
         let eventTime = currentEventTime()
         guard isVisible else {
-            show(shortcuts: shortcuts, mode: mode, triggerHotKey: hotKey, at: eventTime)
+            show(shortcuts: shortcuts, mode: mode, triggerHotKey: hotKey)
             return
         }
         // 修饰键已松开、正在宽限期：只接受松开之前发生的按键。
@@ -74,12 +78,11 @@ final class OverviewPanelController {
     func show(
         shortcuts: [AppShortcut],
         mode: OverviewMode,
-        triggerHotKey: HotKey?,
-        at time: TimeInterval = ProcessInfo.processInfo.systemUptime
+        triggerHotKey: HotKey?
     ) {
         items = shortcuts.filter { $0.hotKey != nil }
         self.triggerHotKey = triggerHotKey
-        state = OverviewInteraction(mode: triggerHotKey == nil ? .toggle : mode, itemCount: items.count, shownAt: time)
+        state = OverviewInteraction(mode: triggerHotKey == nil ? .toggle : mode, itemCount: items.count)
         if triggerHotKey == nil { state.triggerReleased() }
         releaseDetectedAt = nil
 
@@ -126,14 +129,23 @@ final class OverviewPanelController {
     private func installInteraction() {
         removeInteraction()
 
+        if latencyActivity == nil {
+            latencyActivity = ProcessInfo.processInfo.beginActivity(
+                options: [.userInitiated, .latencyCritical],
+                reason: "QuickOpen overview is visible"
+            )
+        }
+
         if state.mode == .hold, let triggerHotKey, !triggerHotKey.modifierFlags.isEmpty {
-            let required = triggerHotKey.modifierFlags
-            // 读取 NSEvent.modifierFlags 不需要辅助功能权限。
-            let timer = Timer(timeInterval: 0.02, repeats: true) { [weak self] _ in
-                let current = NSEvent.modifierFlags.intersection(.deviceIndependentFlagsMask)
-                if !current.isSuperset(of: required) { self?.modifiersReleasedDetected() }
+            let required = Self.cgFlags(for: triggerHotKey.modifierFlags)
+            // 直接读取硬件修饰键状态，不需要辅助功能或输入监控权限。
+            let timer = DispatchSource.makeTimerSource(flags: .strict, queue: .main)
+            timer.schedule(deadline: .now(), repeating: Self.pollInterval, leeway: .nanoseconds(0))
+            timer.setEventHandler { [weak self] in
+                let current = CGEventSource.flagsState(.combinedSessionState)
+                if !current.contains(required) { self?.modifiersReleasedDetected() }
             }
-            RunLoop.main.add(timer, forMode: .common)
+            timer.resume()
             modifierTimer = timer
         } else if state.mode == .toggle {
             registerToggleModeKeys()
@@ -149,30 +161,46 @@ final class OverviewPanelController {
     }
 
     private func removeInteraction() {
-        modifierTimer?.invalidate()
+        modifierTimer?.cancel()
         modifierTimer = nil
+        if let latencyActivity { ProcessInfo.processInfo.endActivity(latencyActivity) }
+        latencyActivity = nil
         if let mouseMonitor { NSEvent.removeMonitor(mouseMonitor) }
         mouseMonitor = nil
         overlayKeys.unregisterAll()
     }
 
-    /// 轮询发现修饰键已松开：先停止轮询，再等一个很短的宽限期，
-    /// 让已经发生但还在事件队列里的触发键（Space）先被处理，避免误判为“没选中/轻按”。
+    /// 轮询发现修饰键已松开：停止轮询，再等一个很短的宽限期，
+    /// 让已经发生但还在事件队列里的触发键（Space）先被处理，避免漏掉最后一次选择。
     private func modifiersReleasedDetected() {
         guard releaseDetectedAt == nil else { return }
         releaseDetectedAt = ProcessInfo.processInfo.systemUptime
-        modifierTimer?.invalidate()
-        modifierTimer = nil
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.releaseGrace) { [weak self] in
+        modifierTimer?.cancel()
+        // 宽限期同样用严格计时器，不会被系统推迟。
+        let grace = DispatchSource.makeTimerSource(flags: .strict, queue: .main)
+        grace.schedule(deadline: .now() + Self.releaseGrace, leeway: .nanoseconds(0))
+        grace.setEventHandler { [weak self] in
+            self?.modifierTimer?.cancel()
+            self?.modifierTimer = nil
             self?.finishHold()
         }
+        modifierTimer = grace
+        grace.resume()
     }
 
     private func finishHold() {
         guard isVisible, state.mode == .hold else { return }
-        let releasedAt = releaseDetectedAt ?? ProcessInfo.processInfo.systemUptime
         releaseDetectedAt = nil
-        apply(state.modifiersReleased(at: releasedAt))
+        apply(state.modifiersReleased())
+    }
+
+    private static func cgFlags(for flags: NSEvent.ModifierFlags) -> CGEventFlags {
+        var result: CGEventFlags = []
+        if flags.contains(.control) { result.insert(.maskControl) }
+        if flags.contains(.option) { result.insert(.maskAlternate) }
+        if flags.contains(.shift) { result.insert(.maskShift) }
+        if flags.contains(.command) { result.insert(.maskCommand) }
+        return result
     }
 
     private func apply(_ effect: OverviewInteraction.Effect) {
@@ -186,10 +214,6 @@ final class OverviewPanelController {
             let item = items[index]
             dismiss()
             onLaunch?(item)
-        case .becomeToggle:
-            // 轻按一下：保持显示，改用切换模式的操作方式。
-            installInteraction()
-            footerLabel?.stringValue = footerText()
         }
     }
 
@@ -271,7 +295,6 @@ final class OverviewPanelController {
         footer.textColor = .tertiaryLabelColor
         footer.lineBreakMode = .byTruncatingTail
         footer.alignment = .center
-        footerLabel = footer
 
         [title, footer].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
@@ -336,9 +359,9 @@ final class OverviewPanelController {
             let modifiers = triggerHotKey.map { HotKeyFormatter.keyCaps(for: $0).dropLast().joined() } ?? ""
             let key = triggerHotKey.map { HotKeyFormatter.keyName(for: $0.keyCode) } ?? ""
             if modifiers.isEmpty {
-                return L("Hold \(key) to show · release to close · tap to keep open", "按住 \(key) 显示 · 松开关闭 · 轻按一下则常驻")
+                return L("Hold \(key) to show · release to close", "按住 \(key) 显示 · 松开关闭")
             }
-            return L("Hold \(modifiers), press \(key) to select · release to open · tap to keep open", "按住 \(modifiers) 连按 \(key) 选择 · 松开打开 · 轻按一下则常驻")
+            return L("Hold \(modifiers), press \(key) to select · release to open", "按住 \(modifiers) 连按 \(key) 选择 · 松开打开")
         case .toggle:
             return L("Arrow keys to select · ↩ to open · Esc to close", "方向键选择 · ↩ 打开 · Esc 关闭")
         }

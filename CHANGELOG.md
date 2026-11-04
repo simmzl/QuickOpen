@@ -8,8 +8,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Added
 - English and Simplified Chinese interface. English by default unless the system language is Chinese; switch in Settings → General.
 
+### Changed
+- Overview (hold mode): removed "tap to keep open". Releasing the modifiers opens the selected app, or closes the panel if nothing is selected. Use toggle mode or the menu bar item to keep the panel open.
+
 ### Fixed
-- Overview (hold mode): selecting with `Space` and releasing the modifiers could open nothing, open late, or leave the panel open in toggle mode. Presses still in the event queue when the modifiers are released are now counted, and a quick tap is only treated as "keep open" when nothing was selected.
+- Overview (hold mode): after releasing the modifiers the panel could freeze until the mouse moved, or open nothing. The app now opts out of App Nap and uses a strict timer while the panel is visible, so the release is detected immediately; `Space` presses still queued at release time are counted.
 - App icons in the overview and launch hint could appear blank the first time they were shown.
 
 ## [1.3.0] - 2026-11-04
