@@ -8,7 +8,10 @@ private let log = Logger(subsystem: "com.simmzl.quickopen", category: "input")
 enum InputMonitoring {
     private static let askedKey = "inputMonitoringRequested"
 
-    static var isGranted: Bool { CGPreflightListenEventAccess() }
+    static var isGranted: Bool { grantedOverride ?? CGPreflightListenEventAccess() }
+
+    /// 仅供截图测试：模拟已授权状态。
+    static var grantedOverride: Bool?
 
     /// 弹出系统授权提示（同一个 App 只会弹一次；之后需要在系统设置中手动开启）。
     @discardableResult
