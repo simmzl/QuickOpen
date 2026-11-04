@@ -125,7 +125,7 @@ private final class KeyCap: NSView {
         layer.borderWidth = 0.5
         if sheen.superlayer == nil { layer.insertSublayer(sheen, at: 0) }
 
-        let isDark = Brand.isDark(effectiveAppearance)
+        let isDark = Theme.isDark(effectiveAppearance)
         var top = NSColor.white.withAlphaComponent(isDark ? 0.16 : 0.75)
         var bottom = NSColor.white.withAlphaComponent(isDark ? 0.04 : 0.25)
         switch style {

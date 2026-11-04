@@ -1,13 +1,33 @@
 import AppKit
 
-/// 品牌色：与图标一致的珊瑚渐变。
-enum Brand {
-    static let coralLight = NSColor(srgbRed: 1.00, green: 0.604, blue: 0.420, alpha: 1) // #FF9A6B
-    static let coral = NSColor(srgbRed: 0.976, green: 0.420, blue: 0.459, alpha: 1)      // #F96B75
-    static let coralDeep = NSColor(srgbRed: 0.949, green: 0.333, blue: 0.478, alpha: 1)  // #F2557A
+/// 界面配色（克制方案）：界面以中性色为主，主题色只用于少数关键状态。
+///
+/// 主题色仅出现在：
+/// 1. 录制快捷键时的输入框（`accent` 描边 + `accentFill` 底色）
+/// 2. 速查面板的选中项（`accent` 描边）
+/// 3. 录制时的操作提示文字（`accentText`）
+/// 4. 品牌标识（App 图标、速查面板标题的小 logo）
+/// 其余控件（复选框、滑块、拖入高亮等）跟随系统强调色，状态色用系统红/橙。
+enum Theme {
+    /// 琥珀橙，与图标一致。用于描边等非文字元素。#F97316
+    static let accent = NSColor(srgbRed: 0.976, green: 0.451, blue: 0.086, alpha: 1)
 
-    static var gradient: NSGradient {
-        NSGradient(colors: [coralLight, coralDeep])!
+    /// 用作文字的主题色：比图标深/浅一档，保证对比度。
+    /// 浅色模式 #C2560C，深色模式 #FFB454。
+    static let accentText = NSColor(name: "QuickOpenAccentText") { appearance in
+        isDark(appearance)
+            ? NSColor(srgbRed: 1.0, green: 0.706, blue: 0.329, alpha: 1)
+            : NSColor(srgbRed: 0.761, green: 0.337, blue: 0.047, alpha: 1)
+    }
+
+    /// 录制状态下输入框的淡底色。
+    static let accentFill = NSColor(name: "QuickOpenAccentFill") { appearance in
+        accent.withAlphaComponent(isDark(appearance) ? 0.16 : 0.08)
+    }
+
+    /// 中性的“运行中”标记。
+    static let runningIndicator = NSColor(name: "QuickOpenRunning") { appearance in
+        isDark(appearance) ? NSColor.white.withAlphaComponent(0.5) : NSColor.black.withAlphaComponent(0.38)
     }
 
     static func isDark(_ appearance: NSAppearance) -> Bool {
@@ -15,35 +35,35 @@ enum Brand {
     }
 }
 
+extension NSColor {
+    /// 在指定外观下解析动态颜色，得到可用于 CALayer 的 CGColor。
+    func resolved(for appearance: NSAppearance) -> CGColor {
+        var result = cgColor
+        appearance.performAsCurrentDrawingAppearance { result = self.cgColor }
+        return result
+    }
+}
+
 extension NSButton {
-    /// macOS 26 使用液态玻璃按钮，旧系统保持圆角按钮。
-    func applyGlassStyle(prominent: Bool = false) {
+    /// macOS 26 使用液态玻璃按钮，旧系统保持圆角按钮。保持中性，不着主题色。
+    func applyGlassStyle() {
         if #available(macOS 26.0, *), GlassSurface.usesSystemGlass {
             bezelStyle = .glass
-            if prominent {
-                bezelColor = Brand.coral
-                tintProminence = .primary
-            }
         } else {
             bezelStyle = .rounded
-            if prominent { bezelColor = Brand.coral }
         }
     }
 }
 
-/// 设置窗口的背景：整窗磨砂透出桌面，角落带一抹品牌色光晕，让上层的玻璃卡片有层次。
+/// 设置窗口的背景：整窗系统磨砂，透出桌面。
 final class SettingsBackdrop: NSView {
     private let material = NSVisualEffectView()
-    private let glow = CAGradientLayer()
-    private let glowAccent = CAGradientLayer()
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        wantsLayer = true
         material.material = .underWindowBackground
         material.blendingMode = .behindWindow
         material.state = .followsWindowActiveState
-        material.wantsLayer = true
         material.autoresizingMask = [.width, .height]
         material.frame = bounds
         addSubview(material)
@@ -53,44 +73,9 @@ final class SettingsBackdrop: NSView {
             material.material = .windowBackground
             material.blendingMode = .withinWindow
         }
-
-        for layer in [glow, glowAccent] {
-            layer.type = .radial
-            layer.startPoint = CGPoint(x: 0.5, y: 0.5)
-            layer.endPoint = CGPoint(x: 1, y: 1)
-            material.layer?.addSublayer(layer)
-        }
-        updateColors()
     }
 
     required init?(coder: NSCoder) { nil }
-
-    override func layout() {
-        super.layout()
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        let w = bounds.width, h = bounds.height
-        glow.frame = CGRect(x: w * 0.35, y: h * 0.45, width: w, height: h)
-        glowAccent.frame = CGRect(x: -w * 0.45, y: -h * 0.55, width: w, height: h)
-        CATransaction.commit()
-    }
-
-    override func viewDidChangeEffectiveAppearance() {
-        super.viewDidChangeEffectiveAppearance()
-        updateColors()
-    }
-
-    private func updateColors() {
-        let dark = Brand.isDark(effectiveAppearance)
-        glow.colors = [
-            Brand.coralLight.withAlphaComponent(dark ? 0.16 : 0.20).cgColor,
-            Brand.coralLight.withAlphaComponent(0).cgColor
-        ]
-        glowAccent.colors = [
-            Brand.coralDeep.withAlphaComponent(0.10).cgColor,
-            Brand.coralDeep.withAlphaComponent(0).cgColor
-        ]
-    }
 }
 
 /// 玻璃表面：macOS 26 上使用系统液态玻璃（NSGlassEffectView），
@@ -245,7 +230,7 @@ final class GlassSurface: NSView {
     }
 
     private func updateRimColors() {
-        let dark = Brand.isDark(effectiveAppearance)
+        let dark = Theme.isDark(effectiveAppearance)
         let top = NSColor.white.withAlphaComponent(dark ? 0.32 : 0.85)
         let mid = NSColor.white.withAlphaComponent(dark ? 0.08 : 0.25)
         let bottom = NSColor.white.withAlphaComponent(dark ? 0.14 : 0.45)

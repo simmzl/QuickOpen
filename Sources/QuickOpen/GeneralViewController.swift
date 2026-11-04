@@ -246,13 +246,13 @@ final class GeneralViewController: NSViewController {
 
     @objc private func recordOverview() {
         overviewNote.stringValue = "按下新快捷键 · Esc 取消 · Delete 关闭速查面板快捷键"
-        overviewNote.textColor = Brand.coralDeep
+        overviewNote.textColor = Theme.accentText
         let previous = context.preferences.overviewHotKey
         context.beginRecording(
             target: SettingsContext.overviewHotKeyID,
             onHint: { [weak self] message in
                 self?.overviewNote.stringValue = message
-                self?.overviewNote.textColor = Brand.coralDeep
+                self?.overviewNote.textColor = Theme.accentText
             },
             apply: { [weak self] hotKey in self?.context.preferences.overviewHotKey = hotKey },
             revert: { [weak self] in self?.context.preferences.overviewHotKey = previous },

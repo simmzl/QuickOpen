@@ -19,7 +19,10 @@ final class OverviewPanelController {
     private var tiles: [OverviewTile] = []
     private var items: [AppShortcut] = []
     private var columns = 1
-    private var selectedIndex: Int? { didSet { updateSelection() } }
+    private(set) var selectedIndex: Int? { didSet { updateSelection() } }
+
+    /// 测试用：直接设置选中项。
+    func select(index: Int?) { selectedIndex = index }
 
     private var activeMode: OverviewMode = .toggle
     private var triggerHotKey: HotKey?
@@ -334,8 +337,9 @@ private final class OverviewTile: NSView {
     var onHover: (() -> Void)?
     var isSelected = false { didSet { updateSelection() } }
 
-    /// 选中态：品牌色淡淡着色的玻璃底。
+    /// 选中态：中性玻璃底 + 主题色描边。
     private let highlight = GlassSurface(kind: .control, cornerRadius: 18)
+    private let highlightRing = NSView()
     private let iconView = NSImageView()
     private let nameLabel = NSTextField(labelWithString: "")
     private let keyCaps: KeyCapView
@@ -346,16 +350,23 @@ private final class OverviewTile: NSView {
         super.init(frame: .zero)
         wantsLayer = true
 
-        highlight.tintColor = Brand.coral.withAlphaComponent(0.35)
         highlight.alphaValue = 0
-        highlight.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(highlight)
-        NSLayoutConstraint.activate([
-            highlight.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
-            highlight.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
-            highlight.topAnchor.constraint(equalTo: topAnchor, constant: 2),
-            highlight.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4)
-        ])
+        highlightRing.wantsLayer = true
+        highlightRing.layer?.cornerRadius = 18
+        highlightRing.layer?.cornerCurve = .continuous
+        highlightRing.layer?.borderWidth = 2
+        highlightRing.layer?.borderColor = Theme.accent.cgColor
+        highlightRing.alphaValue = 0
+        for view in [highlight, highlightRing] {
+            view.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(view)
+            NSLayoutConstraint.activate([
+                view.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
+                view.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
+                view.topAnchor.constraint(equalTo: topAnchor, constant: 2),
+                view.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4)
+            ])
+        }
 
         let icon = NSWorkspace.shared.icon(forFile: shortcut.appPath)
         icon.size = NSSize(width: 128, height: 128)
@@ -376,7 +387,7 @@ private final class OverviewTile: NSView {
         nameLabel.maximumNumberOfLines = 1
 
         runningDot.wantsLayer = true
-        runningDot.layer?.backgroundColor = Brand.coral.cgColor
+
         runningDot.layer?.cornerRadius = 2.5
         runningDot.isHidden = !isRunning
         runningDot.toolTip = "正在运行"
@@ -407,10 +418,21 @@ private final class OverviewTile: NSView {
 
     required init?(coder: NSCoder) { nil }
 
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        runningDot.layer?.backgroundColor = Theme.runningIndicator.resolved(for: effectiveAppearance)
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        runningDot.layer?.backgroundColor = Theme.runningIndicator.resolved(for: effectiveAppearance)
+    }
+
     private func updateSelection() {
         NSAnimationContext.runAnimationGroup { context in
             context.duration = OverlayPanel.reduceMotion ? 0 : 0.12
             highlight.animator().alphaValue = isSelected ? 1 : 0
+            highlightRing.animator().alphaValue = isSelected ? 1 : 0
         }
     }
 

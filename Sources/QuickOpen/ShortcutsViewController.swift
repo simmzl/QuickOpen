@@ -100,7 +100,7 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
         emptyView.onDropApplications = { [weak self] urls in self?.add(urls) }
 
         let addButton = NSButton(title: "添加 App…", target: self, action: #selector(addApplication))
-        addButton.applyGlassStyle(prominent: true)
+        addButton.applyGlassStyle()
         addButton.image = NSImage(systemSymbolName: "plus", accessibilityDescription: nil)
         addButton.imagePosition = .imageLeading
         addButton.keyEquivalent = "n"
@@ -141,7 +141,7 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
 
     private func setHint(_ text: String, highlighted: Bool) {
         hintLabel.stringValue = text
-        hintLabel.textColor = highlighted ? Brand.coralDeep : .secondaryLabelColor
+        hintLabel.textColor = highlighted ? Theme.accentText : .secondaryLabelColor
     }
 
     // MARK: 表格
@@ -329,7 +329,8 @@ private final class ShortcutRowView: NSTableCellView {
     private let iconView = NSImageView()
     private let nameLabel = NSTextField(labelWithString: "")
     private let detailLabel = NSTextField(labelWithString: "")
-    private let runningBadge = NSTextField(labelWithString: "运行中")
+    /// 中性的“运行中”小圆点。
+    private let runningBadge = NSView()
     private let hotKeyControl = HotKeyControl()
     private let deleteButton = NSButton()
     private var hoverArea: NSTrackingArea?
@@ -344,14 +345,20 @@ private final class ShortcutRowView: NSTableCellView {
         detailLabel.textColor = .secondaryLabelColor
         detailLabel.lineBreakMode = .byTruncatingMiddle
 
-        runningBadge.font = .systemFont(ofSize: 10, weight: .medium)
-        runningBadge.textColor = Brand.coralDeep
         runningBadge.wantsLayer = true
+        runningBadge.layer?.cornerRadius = 3
+        runningBadge.toolTip = "正在运行"
+        runningBadge.setAccessibilityLabel("正在运行")
+        runningBadge.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            runningBadge.widthAnchor.constraint(equalToConstant: 6),
+            runningBadge.heightAnchor.constraint(equalToConstant: 6)
+        ])
 
         let nameRow = NSStackView(views: [nameLabel, runningBadge])
         nameRow.orientation = .horizontal
         nameRow.spacing = 6
-        nameRow.alignment = .firstBaseline
+        nameRow.alignment = .centerY
         let texts = NSStackView(views: [nameRow, detailLabel])
         texts.orientation = .vertical
         texts.alignment = .leading
@@ -403,6 +410,7 @@ private final class ShortcutRowView: NSTableCellView {
         iconView.image = icon
         nameLabel.stringValue = shortcut.appName
         runningBadge.isHidden = !isRunning
+        runningBadge.layer?.backgroundColor = Theme.runningIndicator.resolved(for: effectiveAppearance)
         deleteButton.toolTip = "删除 \(shortcut.appName)"
 
         hotKeyControl.hotKey = shortcut.hotKey
@@ -502,7 +510,7 @@ private final class EmptyStateView: NSView {
         detail.maximumNumberOfLines = 2
 
         let button = NSButton(title: "选择 App…", target: self, action: #selector(add))
-        button.applyGlassStyle(prominent: true)
+        button.applyGlassStyle()
         button.controlSize = .large
         button.keyEquivalent = "\r"
 
@@ -527,10 +535,10 @@ private final class EmptyStateView: NSView {
         let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 14, yRadius: 14)
         path.setLineDash([6, 4], count: 2, phase: 0)
         path.lineWidth = isDropTarget ? 2 : 1
-        (isDropTarget ? Brand.coral : NSColor.separatorColor).setStroke()
+        (isDropTarget ? NSColor.controlAccentColor : NSColor.separatorColor).setStroke()
         path.stroke()
         if isDropTarget {
-            Brand.coral.withAlphaComponent(0.08).setFill()
+            NSColor.controlAccentColor.withAlphaComponent(0.06).setFill()
             path.fill()
         }
     }

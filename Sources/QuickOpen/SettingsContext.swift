@@ -146,7 +146,7 @@ final class HotKeyControl: NSControl {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         recordingLabel.font = .systemFont(ofSize: 12, weight: .medium)
-        recordingLabel.textColor = Brand.coralDeep
+        recordingLabel.textColor = Theme.accentText
         [keyCaps, recordingLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             addSubview($0)
@@ -179,7 +179,7 @@ final class HotKeyControl: NSControl {
     override func draw(_ dirtyRect: NSRect) {
         let rect = bounds.insetBy(dx: 1, dy: 1)
         let path = NSBezierPath(roundedRect: rect, xRadius: rect.height / 2, yRadius: rect.height / 2)
-        let isDark = Brand.isDark(effectiveAppearance)
+        let isDark = Theme.isDark(effectiveAppearance)
         // 胶囊形玻璃：半透明底 + 顶部高光
         var alpha: CGFloat = isDark ? 0.07 : 0.45
         if isHovered { alpha += isDark ? 0.05 : 0.20 }
@@ -187,7 +187,7 @@ final class HotKeyControl: NSControl {
         NSColor.white.withAlphaComponent(alpha).setFill()
         path.fill()
         if isRecording {
-            Brand.coral.withAlphaComponent(0.12).setFill()
+            Theme.accentFill.setFill()
             path.fill()
         }
         NSGradient(colors: [
@@ -196,7 +196,7 @@ final class HotKeyControl: NSControl {
         ])?.draw(in: path, angle: -90)
 
         if isRecording {
-            Brand.coral.setStroke()
+            Theme.accent.setStroke()
             path.lineWidth = 2
         } else {
             (isDark ? NSColor.white.withAlphaComponent(0.16) : NSColor.black.withAlphaComponent(0.08)).setStroke()
