@@ -1,3 +1,9 @@
 .build/
+.swiftpm/
 dist/
+*.xcodeproj/
+xcuserdata/
+DerivedData/
 .DS_Store
+*.p12
+*.p8

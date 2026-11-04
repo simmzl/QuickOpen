@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build & test
+    # macOS 26 (Apple Silicon) ships the SDK with NSGlassEffectView.
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+
+      - name: Test
+        run: swift test
+
+      - name: Build universal app
+        env:
+          QUICKOPEN_SKIP_ICON: "1"
+          QUICKOPEN_SIGNING_IDENTITY: "-"
+        run: ./scripts/build-app.sh
+
+      - name: Check binary
+        run: |
+          lipo -info dist/QuickOpen.app/Contents/MacOS/QuickOpen
+          du -sh dist/QuickOpen.app

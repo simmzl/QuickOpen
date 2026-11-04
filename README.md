@@ -1,67 +1,142 @@
-# QuickOpen
+<p align="center">
+  <img src="docs/images/icon.png" width="128" height="128" alt="QuickOpen icon">
+</p>
 
-一个原生、轻量的 macOS 菜单栏 App 启动器。
+<h1 align="center">QuickOpen</h1>
 
-## 功能
+<p align="center">
+  Launch or switch to any Mac app with a single global shortcut.<br>
+  A tiny, native menu bar utility — no Accessibility permission required.
+</p>
 
-- 为任意 `.app` 设置全局快捷键，支持组合键或单个键（单个字母键会在所有 App 中被拦截，界面会提示）
-- App 已运行时立即切换到前台（没有窗口时会新开一个）；未运行时自动启动
-- 再按一次快捷键隐藏 App（可关闭）
-- **速查面板**：按 `⌃⌥Space`（可修改）在屏幕中央以网格显示所有 App 的图标与快捷键
-  - 按住显示：按住 ⌃⌥ 期间显示，连按 Space 选择，松开打开；轻按一下则面板常驻
-  - 切换显示：再按一次或 Esc 关闭，方向键选择，↩ 打开
-  - 面板中直接按 App 快捷键或点击图标都可以打开
-- **启动提示**：每次按 App 快捷键时在屏幕上短暂显示该 App 的图标与快捷键，帮助记忆
-- 快捷键冲突检测、被占用提示；拖动排序；从访达直接拖入 App
-- 登录时启动
-- 不需要“辅助功能”权限
-- 纯 AppKit + Carbon，零第三方依赖
+<p align="center">
+  <b>English</b> · <a href="README.zh-CN.md">简体中文</a>
+</p>
 
-## 使用
+<p align="center">
+  <a href="../../releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/simmzl/QuickOpen?sort=semver"></a>
+  <a href="../../actions/workflows/ci.yml"><img alt="CI" src="https://github.com/simmzl/QuickOpen/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="macOS 13+" src="https://img.shields.io/badge/macOS-13%2B-black">
+  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-blue"></a>
+</p>
 
-1. 打开 `dist/QuickOpen.dmg`。
-2. 将 `QuickOpen` 拖入“应用程序”。
-3. 首次打开 QuickOpen。
-4. 点击“添加 App…”并选择应用。
-5. 按下要绑定的快捷键：可以是组合键，也可以是单个键（如 F5）。
-6. 以后在任何界面按下该快捷键即可呼出目标 App。
+---
 
-菜单栏中的 `⌘` 图标可以打开速查面板、设置、手动切换 App 或退出。速查面板与启动提示的选项在「设置 › 通用」中。
+## Features
 
-## 构建
+- **One key, one app.** Bind a global shortcut to any `.app` — a combination like `⌥⌘S` or a single key like `F5`.
+  - Running? It comes to the front (and opens a window if it has none).
+  - Not running? It launches.
+  - Already in front? Press again to hide it (optional).
+- **Shortcut overview.** Press `⌃⌥Space` to see every app and its shortcut in a grid at the center of the screen, just like `⌘Tab`.
+  - *Hold mode* (default): hold `⌃⌥`, tap `Space` to move the selection, release to open. A quick tap keeps the panel open.
+  - *Toggle mode*: press once to show, again or `Esc` to hide; arrow keys select, `↩` opens.
+  - Or simply press any app's shortcut, or click its icon.
+- **Launch hint.** Each time you use a shortcut, the app's icon and keys flash briefly on screen, so shortcuts stick in your memory. Position and duration are adjustable.
+- **Liquid Glass UI** on macOS 26, with a graceful fallback on macOS 13–15. Follows light/dark mode.
+- **Thoughtful details:** conflict detection, warnings for shortcuts taken by other apps, drag to reorder, drag apps in from Finder, launch at login.
+- **Private and light:** no Accessibility permission, no network access, no third-party dependencies. Pure AppKit + Carbon, about 1 MB.
 
-需要 Xcode Command Line Tools 与 Swift 6：
+<p align="center">
+  <img src="docs/images/overview-dark.png" width="720" alt="Shortcut overview">
+</p>
+
+<details>
+<summary>More screenshots</summary>
+
+| Shortcuts | General |
+|---|---|
+| <img src="docs/images/settings-shortcuts-light.png" width="420" alt="Shortcut settings"> | <img src="docs/images/settings-general-light.png" width="420" alt="General settings"> |
+
+<p align="center"><img src="docs/images/hud-dark.png" width="240" alt="Launch hint"></p>
+
+</details>
+
+## Install
+
+1. Download `QuickOpen-<version>.dmg` from the [latest release](../../releases/latest).
+2. Open it and drag **QuickOpen** into **Applications**.
+3. First launch: builds that are not notarized need a right-click on QuickOpen → **Open** (only once).
+   Alternatively run:
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/QuickOpen.app
+   ```
+
+Requires macOS 13 Ventura or later, on Apple Silicon or Intel.
+
+## Usage
+
+1. Open QuickOpen. Its icon appears in the menu bar.
+2. Click **Add App…** (or drag apps into the window).
+3. Press the shortcut you want to bind. Press `Esc` to cancel or `Delete` to clear.
+4. Press that shortcut anywhere to bring up the app.
+
+Tips:
+
+- Single letter or number keys work, but they will be captured system-wide (you won't be able to type that character). Function keys (`F1`–`F20`) are a safe choice for single-key shortcuts.
+- Settings → **General** lets you change the overview shortcut and mode, the launch hint, hide-on-repeat, and launch at login.
+- Shortcuts are stored in `~/Library/Application Support/QuickOpen/shortcuts.json`. If the file is ever unreadable, it is backed up as `shortcuts.corrupted-<time>.json` instead of being overwritten.
+
+## Build from source
+
+Requires Xcode 26 (Swift 6) for the Liquid Glass APIs.
 
 ```bash
-./scripts/build-dmg.sh
+git clone https://github.com/simmzl/QuickOpen.git
+cd QuickOpen
+swift test                 # run tests
+./scripts/build-app.sh     # → dist/QuickOpen.app (universal)
+./scripts/build-dmg.sh     # → dist/QuickOpen-<version>.dmg / .zip / .sha256
 ```
 
-构建结果位于 `dist/QuickOpen.app` 和 `dist/QuickOpen.dmg`。默认同时构建 Apple Silicon 与 Intel 架构。Release 构建使用 `-Osize`、链接期死代码裁剪和符号裁剪，以尽量减小体积。
+Useful environment variables for the build scripts:
 
-如需公开分发且不出现 Gatekeeper 警告，请安装 `Developer ID Application` 证书。构建脚本会自动使用它；也可以显式指定：
+| Variable | Purpose |
+|---|---|
+| `QUICKOPEN_VERSION` | Version to stamp into the app, e.g. `1.4.0` |
+| `QUICKOPEN_ARCHS` | Architectures, default `arm64 x86_64` |
+| `QUICKOPEN_SIGNING_IDENTITY` | `codesign` identity; defaults to a *Developer ID Application* certificate if present, otherwise ad-hoc |
+| `QUICKOPEN_NOTARY_PROFILE` | `notarytool` keychain profile, enables notarization |
+| `QUICKOPEN_SKIP_ICON=1` | Use the committed icon instead of regenerating it |
+
+Layout screenshots of the main views can be rendered with:
 
 ```bash
-QUICKOPEN_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID)" ./scripts/build-dmg.sh
+QUICKOPEN_SNAPSHOT_DIR=/tmp/quickopen-shots swift test --filter SnapshotTests
 ```
 
-如已使用 `notarytool store-credentials` 保存公证凭据，可以同时完成公证：
+## Releasing
 
-```bash
-QUICKOPEN_NOTARY_PROFILE="quickopen-notary" ./scripts/build-dmg.sh
-```
+Releases are fully automated by GitHub Actions:
 
-配置文件保存在：
+1. Add a section for the new version to [CHANGELOG.md](CHANGELOG.md).
+2. Tag and push:
+   ```bash
+   git tag v1.4.0
+   git push origin v1.4.0
+   ```
+3. The [Release workflow](.github/workflows/release.yml) runs the tests, builds a universal app, packages a `.dmg` and `.zip` with SHA-256 checksums, and publishes a GitHub Release whose notes come from the changelog. Tags with a suffix (e.g. `v1.4.0-beta.1`) become pre-releases.
 
-```text
-~/Library/Application Support/QuickOpen/shortcuts.json
-```
+**Signing and notarization (optional).** Without extra configuration the release is ad-hoc signed. To ship a Developer ID–signed and notarized build, add these repository secrets:
 
-首次启动会自动复制旧版 AppKey 的配置，不会删除原文件。配置文件损坏时会备份为 `shortcuts.corrupted-<时间>.json`，不会被覆盖。
+| Secret | Value |
+|---|---|
+| `MACOS_CERTIFICATE_P12` | Base64 of your *Developer ID Application* certificate exported as `.p12` |
+| `MACOS_CERTIFICATE_PASSWORD` | Password of the `.p12` |
+| `NOTARY_KEY_P8` | Base64 of an App Store Connect API key (`.p8`) |
+| `NOTARY_KEY_ID` | The API key ID |
+| `NOTARY_ISSUER_ID` | The API issuer ID |
 
-## 测试
+## How it works
 
-```bash
-swift test
-# 生成界面截图（浅色/深色）以检查布局：
-QUICKOPEN_SNAPSHOT_DIR=/tmp/qo-shots swift test --filter SnapshotTests
-```
+- Global shortcuts use Carbon's `RegisterEventHotKey`, which does not require Accessibility or Input Monitoring permission.
+- "Hold" mode in the overview reads the current modifier state (`NSEvent.modifierFlags`) instead of monitoring the keyboard.
+- Apps are activated through `NSWorkspace.openApplication`, which behaves like clicking the Dock icon.
+
+## Contributing
+
+Issues and pull requests are welcome. Please run `swift test` before submitting.
+
+## License
+
+[MIT](LICENSE) © Simmzl
