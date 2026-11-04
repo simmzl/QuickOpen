@@ -7,6 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 - Simpler app icon: two glass cards instead of three. The menu bar icon matches.
+- README: demo video and screenshots now use F1–F4 for Claude, ChatGPT, Chrome and Figma.
 
 ## [1.3.1] - 2026-11-04
 

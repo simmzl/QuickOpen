@@ -22,6 +22,12 @@
 
 ---
 
+<p align="center">
+  <img src="docs/media/demo-zh.gif" width="800" alt="QuickOpen 演示：F1–F4 切换 Claude、ChatGPT、Chrome、Figma">
+  <br>
+  <sub><a href="docs/media/demo-zh.mp4">观看高清版（MP4）</a></sub>
+</p>
+
 ## 功能
 
 - **一个键，一个 App。** 给任意 `.app` 绑定全局快捷键，可以是 `⌥⌘S` 这样的组合键，也可以是 `F5` 这样的单键。
@@ -112,6 +118,12 @@ README 中的中英文截图由以下命令生成：
 
 ```bash
 QUICKOPEN_README_IMAGES=1 QUICKOPEN_SNAPSHOT_DIR=/tmp/qo swift test --filter testRenderReadmeImages
+```
+
+演示视频由 App 真实的界面组件渲染生成，不需要录屏：
+
+```bash
+QUICKOPEN_DEMO_DIR=/tmp/qo-demo swift test --filter DemoVideoTests   # → demo-en.mp4、demo-zh.mp4
 ```
 
 ## 发布

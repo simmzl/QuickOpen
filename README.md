@@ -22,6 +22,12 @@
 
 ---
 
+<p align="center">
+  <img src="docs/media/demo-en.gif" width="800" alt="QuickOpen demo: F1–F4 switch to Claude, ChatGPT, Chrome and Figma">
+  <br>
+  <sub><a href="docs/media/demo-en.mp4">Watch in HD (MP4)</a></sub>
+</p>
+
 ## Features
 
 - **One key, one app.** Bind a global shortcut to any `.app` — a combination like `⌥⌘S` or a single key like `F5`.
@@ -112,6 +118,12 @@ README screenshots (English and Chinese) are generated with:
 
 ```bash
 QUICKOPEN_README_IMAGES=1 QUICKOPEN_SNAPSHOT_DIR=/tmp/qo swift test --filter testRenderReadmeImages
+```
+
+The demo video is rendered from the app's real UI components (no screen recording):
+
+```bash
+QUICKOPEN_DEMO_DIR=/tmp/qo-demo swift test --filter DemoVideoTests   # → demo-en.mp4, demo-zh.mp4
 ```
 
 ## Releasing

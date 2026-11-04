@@ -142,6 +142,8 @@ final class LaunchHUDController {
         nameLabel.alignment = .center
         nameLabel.lineBreakMode = .byTruncatingTail
         nameLabel.maximumNumberOfLines = 1
+        // 名称不应被压缩成“Fig…”：只在真正超过面板宽度时才截断。
+        nameLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         statusLabel.font = .systemFont(ofSize: 12, weight: .medium)
         statusLabel.textColor = .secondaryLabelColor
