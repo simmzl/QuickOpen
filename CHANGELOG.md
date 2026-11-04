@@ -5,9 +5,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-11-04
+
 ### Changed
 - Simpler app icon: two glass cards instead of three. The menu bar icon matches.
-- README: demo video and screenshots now use F1–F4 for Claude, ChatGPT, Chrome and Figma.
+- README: added a demo video, and screenshots now use F1–F4 for Claude, ChatGPT, Chrome and Figma.
+
+### Fixed
+- Launch hint: short app names (e.g. "Figma") are no longer truncated.
 
 ## [1.3.1] - 2026-11-04
 
@@ -61,6 +66,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - Initial release.
 
-[Unreleased]: https://github.com/simmzl/QuickOpen/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/simmzl/QuickOpen/compare/v1.3.2...HEAD
+[1.3.2]: https://github.com/simmzl/QuickOpen/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/simmzl/QuickOpen/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/simmzl/QuickOpen/releases/tag/v1.3.0
