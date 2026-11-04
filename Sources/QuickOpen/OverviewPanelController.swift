@@ -1,5 +1,8 @@
 import AppKit
 import Carbon
+import os
+
+private let log = Logger(subsystem: "com.simmzl.quickopen", category: "overview")
 
 /// 类似 ⌘Tab 的速查面板：在屏幕中央列出所有已设置快捷键的 App。
 ///
@@ -32,8 +35,10 @@ final class OverviewPanelController {
     }
 
     private var triggerHotKey: HotKey?
-    /// 轮询修饰键状态的严格计时器（不允许系统合并或推迟）。
+    /// 兜底：轮询修饰键状态的严格计时器（面板没能成为 key 时才依赖它）。
     private var modifierTimer: DispatchSourceTimer?
+    /// 面板为 key 时，修饰键变化作为真实的输入事件送到本 App。
+    private var flagsMonitor: Any?
     /// 面板显示期间持有的“延迟敏感”活动声明：关闭 App Nap 与定时器合并。
     /// 否则后台菜单栏 App 的定时器会被系统推迟，表现为松开按键后面板卡住、动一下鼠标才打开。
     private var latencyActivity: NSObjectProtocol?
@@ -42,7 +47,9 @@ final class OverviewPanelController {
     private var releaseDetectedAt: TimeInterval?
     /// 修饰键松开后等待排队中的热键事件的宽限期。
     private static let releaseGrace: TimeInterval = 0.03
-    private static let pollInterval: DispatchTimeInterval = .milliseconds(10)
+    /// 面板为 key 时，轮询发现松开后等待 flagsChanged 事件的最长时间。
+    private static let eventWaitTimeout: TimeInterval = 0.06
+    private static let pollInterval: DispatchTimeInterval = .milliseconds(15)
 
     private static let tileSize = NSSize(width: 124, height: 146)
     private static let padding: CGFloat = 22
@@ -51,6 +58,10 @@ final class OverviewPanelController {
 
     /// 面板处于显示状态（不含淡出过程）。
     private(set) var isVisible = false
+    /// 打开面板前的前台 App；没有选择任何 App 就关闭时，把焦点还给它。
+    private var previousApp: NSRunningApplication?
+    /// 本次面板是否已打开了某个 App（这种情况下不需要还原焦点）。
+    private var didLaunch = false
 
     // MARK: 触发
 
@@ -61,7 +72,7 @@ final class OverviewPanelController {
             show(shortcuts: shortcuts, mode: mode, triggerHotKey: hotKey)
             return
         }
-        // 修饰键已松开、正在宽限期：只接受松开之前发生的按键。
+        // 修饰键已松开（等待结算中）之后才发生的按键不计入。
         if let releasedAt = releaseDetectedAt, eventTime > releasedAt { return }
         apply(state.triggerPressed())
     }
@@ -101,8 +112,19 @@ final class OverviewPanelController {
         )
 
         isVisible = true
+        didLaunch = false
         panel.alphaValue = 0
+        panel.allowsKey = true
+        // 像 ⌘Tab 一样，面板显示期间让 QuickOpen 短暂成为前台 App（发生在按快捷键的处理过程中，系统允许）：
+        // - 键盘事件（包括松开修饰键）一定送达本 App；
+        // - 之后由前台 App 切换到目标 App，macOS 14+ 的协作式激活会直接放行，
+        //   不会被推迟到下一次鼠标/键盘输入。
+        let front = NSWorkspace.shared.frontmostApplication
+        previousApp = front?.processIdentifier == ProcessInfo.processInfo.processIdentifier ? nil : front
+        AppLauncher.activateSelf()
         panel.orderFrontRegardless()
+        panel.makeKey()
+        log.debug("show: active=\(NSApp.isActive) key=\(self.panel.isKeyWindow) prev=\(self.previousApp?.bundleIdentifier ?? "-", privacy: .public)")
         NSAnimationContext.runAnimationGroup { context in
             context.duration = OverlayPanel.reduceMotion ? 0.08 : 0.12
             panel.animator().alphaValue = 1
@@ -111,17 +133,29 @@ final class OverviewPanelController {
         installInteraction()
     }
 
+    /// 面板显示期间直接按了某个 App 的快捷键：关闭面板但不还原焦点。
+    func dismissForLaunch() {
+        didLaunch = true
+        dismiss()
+    }
+
     func dismiss() {
         guard isVisible else { return }
         isVisible = false
         removeInteraction()
-        NSAnimationContext.runAnimationGroup({ context in
-            context.duration = 0.1
-            panel.animator().alphaValue = 0
-        }, completionHandler: { [weak self] in
-            guard let self, !self.isVisible else { return }
-            self.panel.orderOut(nil)
-        })
+        // 立即交还 key 状态，避免挡住目标 App 的键盘焦点。
+        panel.allowsKey = false
+        if panel.isKeyWindow { panel.resignKey() }
+        // 没有打开任何 App：把焦点还给打开面板前的 App。
+        if !didLaunch, let previousApp, !previousApp.isTerminated {
+            if #available(macOS 14.0, *) { NSApp.yieldActivation(to: previousApp) }
+            AppLauncher.bringToFront(previousApp)
+        }
+        previousApp = nil
+        // 立即移除面板，不做淡出：淡出动画依赖本 App 的刷新，失去前台后可能停在半透明状态。
+        panel.orderOut(nil)
+        panel.alphaValue = 1
+        log.debug("dismissed (launch=\(self.didLaunch))")
     }
 
     // MARK: 交互
@@ -137,13 +171,19 @@ final class OverviewPanelController {
         }
 
         if state.mode == .hold, let triggerHotKey, !triggerHotKey.modifierFlags.isEmpty {
+            let requiredFlags = triggerHotKey.modifierFlags
+            flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+                let current = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+                if !current.isSuperset(of: requiredFlags) { self?.modifiersReleased(source: "event") }
+                return event
+            }
             let required = Self.cgFlags(for: triggerHotKey.modifierFlags)
             // 直接读取硬件修饰键状态，不需要辅助功能或输入监控权限。
             let timer = DispatchSource.makeTimerSource(flags: .strict, queue: .main)
             timer.schedule(deadline: .now(), repeating: Self.pollInterval, leeway: .nanoseconds(0))
             timer.setEventHandler { [weak self] in
                 let current = CGEventSource.flagsState(.combinedSessionState)
-                if !current.contains(required) { self?.modifiersReleasedDetected() }
+                if !current.contains(required) { self?.modifiersReleased(source: "poll") }
             }
             timer.resume()
             modifierTimer = timer
@@ -163,6 +203,8 @@ final class OverviewPanelController {
     private func removeInteraction() {
         modifierTimer?.cancel()
         modifierTimer = nil
+        if let flagsMonitor { NSEvent.removeMonitor(flagsMonitor) }
+        flagsMonitor = nil
         if let latencyActivity { ProcessInfo.processInfo.endActivity(latencyActivity) }
         latencyActivity = nil
         if let mouseMonitor { NSEvent.removeMonitor(mouseMonitor) }
@@ -170,22 +212,38 @@ final class OverviewPanelController {
         overlayKeys.unregisterAll()
     }
 
-    /// 轮询发现修饰键已松开：停止轮询，再等一个很短的宽限期，
-    /// 让已经发生但还在事件队列里的触发键（Space）先被处理，避免漏掉最后一次选择。
-    private func modifiersReleasedDetected() {
+    /// 检测到修饰键已松开。
+    ///
+    /// 必须在“松开”这个真实输入事件被本 App 收到之后再去打开 App：macOS 14+ 的协作式激活
+    /// 只放行与最近一次用户输入相关的激活请求，否则会推迟到下一次输入（表现为要动一下鼠标）。
+    /// - 来自 flagsChanged 事件（面板为 key）：就在事件处理过程中同步结算。
+    ///   热键回调也是同步处理的，事件按顺序到达，松开前按下的 Space 已经计入选择。
+    /// - 来自轮询：轮询往往比事件早几毫秒发现，此时不能抢先打开，只记录下来等事件到达；
+    ///   如果面板不是 key（收不到事件），短暂等待后由轮询兜底结算。
+    private func modifiersReleased(source: String) {
+        log.debug("modifiers released (\(source, privacy: .public)), key=\(self.panel.isKeyWindow) active=\(NSApp.isActive) front=\(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "-", privacy: .public)")
+        if source == "event" {
+            modifierTimer?.cancel()
+            modifierTimer = nil
+            releaseDetectedAt = nil
+            finishHold()
+            return
+        }
         guard releaseDetectedAt == nil else { return }
         releaseDetectedAt = ProcessInfo.processInfo.systemUptime
         modifierTimer?.cancel()
-        // 宽限期同样用严格计时器，不会被系统推迟。
-        let grace = DispatchSource.makeTimerSource(flags: .strict, queue: .main)
-        grace.schedule(deadline: .now() + Self.releaseGrace, leeway: .nanoseconds(0))
-        grace.setEventHandler { [weak self] in
-            self?.modifierTimer?.cancel()
-            self?.modifierTimer = nil
-            self?.finishHold()
+        let wait = panel.isKeyWindow ? Self.eventWaitTimeout : Self.releaseGrace
+        let fallback = DispatchSource.makeTimerSource(flags: .strict, queue: .main)
+        fallback.schedule(deadline: .now() + wait, leeway: .nanoseconds(0))
+        fallback.setEventHandler { [weak self] in
+            guard let self else { return }
+            log.debug("release fallback after \(wait, privacy: .public)s")
+            self.modifierTimer?.cancel()
+            self.modifierTimer = nil
+            self.finishHold()
         }
-        modifierTimer = grace
-        grace.resume()
+        modifierTimer = fallback
+        fallback.resume()
     }
 
     private func finishHold() {
@@ -212,8 +270,8 @@ final class OverviewPanelController {
             dismiss()
         case .launch(let index):
             let item = items[index]
-            dismiss()
-            onLaunch?(item)
+            log.debug("launch \(item.appName, privacy: .public)")
+            launch(item)
         }
     }
 
@@ -247,7 +305,12 @@ final class OverviewPanelController {
 
     private func launchSelection() {
         guard let index = state.selection, items.indices.contains(index) else { return }
-        let item = items[index]
+        launch(items[index])
+    }
+
+    /// 打开选中的 App：先收起面板（不还原焦点），再由当前处于前台的 QuickOpen 把激活让给目标 App。
+    private func launch(_ item: AppShortcut) {
+        didLaunch = true
         dismiss()
         onLaunch?(item)
     }
@@ -342,10 +405,7 @@ final class OverviewPanelController {
             )
             let tile = OverviewTile(shortcut: item, isRunning: isRunning?(item) ?? false)
             tile.frame = NSRect(origin: origin, size: tileSize)
-            tile.onClick = { [weak self] in
-                self?.dismiss()
-                self?.onLaunch?(item)
-            }
+            tile.onClick = { [weak self] in self?.launch(item) }
             tile.onHover = { [weak self] in self?.select(index: index) }
             content.addSubview(tile)
             tiles.append(tile)

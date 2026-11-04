@@ -137,7 +137,7 @@ Releases are fully automated by GitHub Actions:
 ## How it works
 
 - Global shortcuts use Carbon's `RegisterEventHotKey`, which does not require Accessibility or Input Monitoring permission.
-- "Hold" mode in the overview polls the current modifier state (`CGEventSource.flagsState`) instead of monitoring the keyboard.
+- Like `⌘Tab`, QuickOpen briefly becomes the active app while the overview is visible, so releasing the modifiers is delivered as a normal key event and activation is handed straight to the chosen app. No keyboard monitoring is involved.
 - Apps are activated through `NSWorkspace.openApplication`, which behaves like clicking the Dock icon.
 
 ## Contributing

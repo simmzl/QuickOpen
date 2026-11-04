@@ -118,12 +118,10 @@ final class GlobalHotKeyManager {
         guard let action = table[identifier.id] else {
             return actions[identifier.id] == nil ? OSStatus(eventNotHandledErr) : noErr
         }
-        // 派发到下一轮 runloop，避免在 Carbon 回调中修改热键注册表；保留事件发生的时间。
-        let time = GetEventTime(event)
-        DispatchQueue.main.async { [weak self] in
-            self?.currentEventTime = time
-            action()
-        }
+        // 在热键事件的处理过程中同步执行：动作（例如激活其他 App）因此与这次真实按键关联，
+        // macOS 14+ 的协作式激活才会立即放行。回调里注册/注销热键是安全的（不遍历注册表）。
+        currentEventTime = GetEventTime(event)
+        action()
         return noErr
     }
 }

@@ -24,12 +24,11 @@ final class AppLauncher {
                 return .hidden
             }
             if running.isHidden { running.unhide() }
-            // 通过 NSWorkspace 打开已运行的 App 会发送 reopen 事件，
-            // 行为等同点击 Dock 图标：没有窗口时 App 会自己新建一个。
+            // 先同步激活（在当前输入事件处理过程中，系统会立即放行），
+            // 再通过 NSWorkspace 发送 reopen：行为等同点击 Dock 图标，没有窗口时 App 会自己新建一个。
+            Self.bringToFront(running)
             if let url = running.bundleURL {
                 open(url, appName: shortcut.appName, fallback: running)
-            } else {
-                Self.bringToFront(running)
             }
             return .activated
         }
@@ -57,6 +56,8 @@ final class AppLauncher {
     /// 兼容 macOS 13 与 14+ 的强制前台激活。
     static func bringToFront(_ application: NSRunningApplication) {
         if #available(macOS 14.0, *) {
+            // QuickOpen 处于前台时（速查面板显示期间），把激活权明确让给目标 App。
+            if NSApp.isActive { NSApp.yieldActivation(to: application) }
             application.activate(from: .current, options: [.activateAllWindows])
             application.activate(options: [.activateAllWindows])
         } else {

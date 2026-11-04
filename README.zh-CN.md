@@ -137,7 +137,7 @@ QUICKOPEN_README_IMAGES=1 QUICKOPEN_SNAPSHOT_DIR=/tmp/qo swift test --filter tes
 ## 实现原理
 
 - 全局快捷键使用 Carbon 的 `RegisterEventHotKey`，不需要“辅助功能”或“输入监控”权限。
-- 速查面板的“按住显示”通过轮询当前修饰键状态（`CGEventSource.flagsState`）判断松开，不监听键盘输入。
+- 和 `⌘Tab` 一样，速查面板显示期间 QuickOpen 会短暂成为前台 App，松开修饰键会作为普通按键事件送达，随即把前台直接交给选中的 App；全程不监听键盘输入。
 - 通过 `NSWorkspace.openApplication` 激活 App，效果等同点击 Dock 图标。
 
 ## 参与贡献

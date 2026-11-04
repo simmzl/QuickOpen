@@ -41,7 +41,11 @@ class OverlayPanel: NSPanel {
         contentView = root
     }
 
-    override var canBecomeKey: Bool { false }
+    /// 是否允许成为 key window。速查面板需要成为 key（不激活 App）来直接接收修饰键变化事件；
+    /// 启动提示只是展示，不需要。
+    var allowsKey = false
+
+    override var canBecomeKey: Bool { allowsKey }
     override var canBecomeMain: Bool { false }
 
     /// 鼠标所在的屏幕；找不到则用主屏。

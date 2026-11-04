@@ -101,7 +101,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// 通过快捷键、菜单或速查面板打开 App。
     private func launch(_ shortcut: AppShortcut) {
-        if overview.isVisible { overview.dismiss() }
+        if overview.isVisible { overview.dismissForLaunch() }
         let outcome = launcher.activate(shortcut)
         if outcome != .missing { showHUD(for: shortcut, outcome: outcome, force: false) }
     }
