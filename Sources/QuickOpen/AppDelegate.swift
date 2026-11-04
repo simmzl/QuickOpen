@@ -26,6 +26,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         launcher.hidesWhenFrontmost = preferences.hidesWhenFrontmost
         overview.onLaunch = { [weak self] shortcut in self?.launch(shortcut) }
         overview.isRunning = { [weak self] shortcut in self?.launcher.runningApplication(for: shortcut) != nil }
+        overview.currentEventTime = { [weak self] in
+            self?.hotKeyManager.currentEventTime ?? ProcessInfo.processInfo.systemUptime
+        }
         NotificationCenter.default.addObserver(
             self, selector: #selector(preferencesChanged),
             name: .quickOpenPreferencesChanged, object: preferences

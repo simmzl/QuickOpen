@@ -23,6 +23,10 @@ final class GlobalHotKeyManager {
 
     var isEmpty: Bool { hotKeyRefs.isEmpty }
 
+    /// 正在派发的热键事件的时间戳（系统启动后的秒数，与 `ProcessInfo.systemUptime` 同基准）。
+    /// 在 action / onRelease 回调中读取，用于判断事件发生的先后顺序。
+    private(set) var currentEventTime: TimeInterval = 0
+
     init(signature: OSType = GlobalHotKeyManager.appSignature) {
         self.signature = signature
         var eventTypes = [
@@ -114,8 +118,12 @@ final class GlobalHotKeyManager {
         guard let action = table[identifier.id] else {
             return actions[identifier.id] == nil ? OSStatus(eventNotHandledErr) : noErr
         }
-        // 派发到下一轮 runloop，避免在 Carbon 回调中修改热键注册表。
-        DispatchQueue.main.async(execute: action)
+        // 派发到下一轮 runloop，避免在 Carbon 回调中修改热键注册表；保留事件发生的时间。
+        let time = GetEventTime(event)
+        DispatchQueue.main.async { [weak self] in
+            self?.currentEventTime = time
+            action()
+        }
         return noErr
     }
 }

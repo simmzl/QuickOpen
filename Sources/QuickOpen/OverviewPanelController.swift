@@ -13,27 +13,32 @@ final class OverviewPanelController {
     var onLaunch: ((AppShortcut) -> Void)?
     /// 判断 App 是否正在运行（显示小圆点）。
     var isRunning: ((AppShortcut) -> Bool)?
+    /// 当前热键事件的时间戳（由 AppDelegate 提供，来自 GlobalHotKeyManager）。
+    var currentEventTime: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
 
     let panel = OverlayPanel(cornerRadius: 22)
     private let overlayKeys = GlobalHotKeyManager(signature: GlobalHotKeyManager.overlaySignature)
     private var tiles: [OverviewTile] = []
     private var items: [AppShortcut] = []
     private var columns = 1
-    private(set) var selectedIndex: Int? { didSet { updateSelection() } }
+    private var state = OverviewInteraction(mode: .toggle, itemCount: 0, shownAt: 0)
+
+    var selectedIndex: Int? { state.selection }
 
     /// 测试用：直接设置选中项。
-    func select(index: Int?) { selectedIndex = index }
+    func select(index: Int?) {
+        state.select(index)
+        updateSelection()
+    }
 
-    private var activeMode: OverviewMode = .toggle
     private var triggerHotKey: HotKey?
-    /// 触发键当前是否处于按下状态，用于过滤按住不放时的重复事件。
-    private var triggerKeyIsDown = false
     private var modifierTimer: Timer?
     private var mouseMonitor: Any?
-    private var shownAt = Date.distantPast
+    /// 检测到修饰键松开的时间；在宽限期内到达、且发生在此之前的触发键仍计入选择。
+    private var releaseDetectedAt: TimeInterval?
     private weak var footerLabel: NSTextField?
-    /// 按住模式下短于此时长的轻按，会让面板转为常驻（切换模式）。
-    private static let quickTapInterval: TimeInterval = 0.35
+    /// 修饰键松开后等待排队中的热键事件的宽限期。
+    private static let releaseGrace: TimeInterval = 0.04
 
     private static let tileSize = NSSize(width: 124, height: 146)
     private static let padding: CGFloat = 22
@@ -46,40 +51,37 @@ final class OverviewPanelController {
     // MARK: 触发
 
     /// 速查面板快捷键被按下。
-    func hotKeyPressed(
-        shortcuts: [AppShortcut],
-        hotKey: HotKey,
-        mode: OverviewMode
-    ) {
-        if isVisible {
-            guard !triggerKeyIsDown else { return } // 按住不放产生的重复事件
-            triggerKeyIsDown = true
-            switch activeMode {
-            case .hold:
-                advanceSelection(by: 1)
-            case .toggle:
-                dismiss()
-            }
+    func hotKeyPressed(shortcuts: [AppShortcut], hotKey: HotKey, mode: OverviewMode) {
+        let eventTime = currentEventTime()
+        guard isVisible else {
+            show(shortcuts: shortcuts, mode: mode, triggerHotKey: hotKey, at: eventTime)
             return
         }
-        triggerKeyIsDown = true
-        show(shortcuts: shortcuts, mode: mode, triggerHotKey: hotKey)
+        // 修饰键已松开、正在宽限期：只接受松开之前发生的按键。
+        if let releasedAt = releaseDetectedAt, eventTime > releasedAt { return }
+        apply(state.triggerPressed())
     }
 
     func hotKeyReleased() {
-        triggerKeyIsDown = false
+        state.triggerReleased()
         // 单键快捷键没有可检测的修饰键：按住该键显示，松开即视为“松开”。
-        if isVisible, activeMode == .hold, triggerHotKey?.modifierFlags.isEmpty == true {
-            modifiersReleased()
+        if isVisible, state.mode == .hold, triggerHotKey?.modifierFlags.isEmpty == true {
+            finishHold()
         }
     }
 
     /// 显示面板。从菜单打开时修饰键并未按住，应使用 `.toggle`。
-    func show(shortcuts: [AppShortcut], mode: OverviewMode, triggerHotKey: HotKey?) {
+    func show(
+        shortcuts: [AppShortcut],
+        mode: OverviewMode,
+        triggerHotKey: HotKey?,
+        at time: TimeInterval = ProcessInfo.processInfo.systemUptime
+    ) {
         items = shortcuts.filter { $0.hotKey != nil }
-        activeMode = triggerHotKey == nil ? .toggle : mode
         self.triggerHotKey = triggerHotKey
-        selectedIndex = nil
+        state = OverviewInteraction(mode: triggerHotKey == nil ? .toggle : mode, itemCount: items.count, shownAt: time)
+        if triggerHotKey == nil { state.triggerReleased() }
+        releaseDetectedAt = nil
 
         buildContent()
         guard let screen = OverlayPanel.activeScreen else { return }
@@ -95,7 +97,6 @@ final class OverviewPanelController {
             display: true
         )
 
-        shownAt = Date()
         isVisible = true
         panel.alphaValue = 0
         panel.orderFrontRegardless()
@@ -125,20 +126,19 @@ final class OverviewPanelController {
     private func installInteraction() {
         removeInteraction()
 
-        if activeMode == .hold, let triggerHotKey, triggerHotKey.modifierFlags.isEmpty {
-            // 单键：由 hotKeyReleased() 处理松开，这里不需要轮询修饰键。
-        } else if activeMode == .hold, let triggerHotKey {
+        if state.mode == .hold, let triggerHotKey, !triggerHotKey.modifierFlags.isEmpty {
             let required = triggerHotKey.modifierFlags
             // 读取 NSEvent.modifierFlags 不需要辅助功能权限。
-            let timer = Timer(timeInterval: 0.03, repeats: true) { [weak self] _ in
+            let timer = Timer(timeInterval: 0.02, repeats: true) { [weak self] _ in
                 let current = NSEvent.modifierFlags.intersection(.deviceIndependentFlagsMask)
-                if !current.isSuperset(of: required) { self?.modifiersReleased() }
+                if !current.isSuperset(of: required) { self?.modifiersReleasedDetected() }
             }
             RunLoop.main.add(timer, forMode: .common)
             modifierTimer = timer
-        } else {
+        } else if state.mode == .toggle {
             registerToggleModeKeys()
         }
+        // 单键 + 按住模式：由 hotKeyReleased() 处理松开。
 
         // 点击面板以外的地方关闭。监听全局鼠标事件不需要辅助功能权限。
         mouseMonitor = NSEvent.addGlobalMonitorForEvents(
@@ -154,20 +154,43 @@ final class OverviewPanelController {
         if let mouseMonitor { NSEvent.removeMonitor(mouseMonitor) }
         mouseMonitor = nil
         overlayKeys.unregisterAll()
-        triggerKeyIsDown = false
     }
 
-    private func modifiersReleased() {
-        if selectedIndex == nil, Date().timeIntervalSince(shownAt) < Self.quickTapInterval {
+    /// 轮询发现修饰键已松开：先停止轮询，再等一个很短的宽限期，
+    /// 让已经发生但还在事件队列里的触发键（Space）先被处理，避免误判为“没选中/轻按”。
+    private func modifiersReleasedDetected() {
+        guard releaseDetectedAt == nil else { return }
+        releaseDetectedAt = ProcessInfo.processInfo.systemUptime
+        modifierTimer?.invalidate()
+        modifierTimer = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.releaseGrace) { [weak self] in
+            self?.finishHold()
+        }
+    }
+
+    private func finishHold() {
+        guard isVisible, state.mode == .hold else { return }
+        let releasedAt = releaseDetectedAt ?? ProcessInfo.processInfo.systemUptime
+        releaseDetectedAt = nil
+        apply(state.modifiersReleased(at: releasedAt))
+    }
+
+    private func apply(_ effect: OverviewInteraction.Effect) {
+        updateSelection()
+        switch effect {
+        case .none:
+            break
+        case .dismiss:
+            dismiss()
+        case .launch(let index):
+            let item = items[index]
+            dismiss()
+            onLaunch?(item)
+        case .becomeToggle:
             // 轻按一下：保持显示，改用切换模式的操作方式。
-            activeMode = .toggle
             installInteraction()
             footerLabel?.stringValue = footerText()
-            return
         }
-        let selected = selectedIndex.flatMap { items.indices.contains($0) ? items[$0] : nil }
-        dismiss()
-        if let selected { onLaunch?(selected) }
     }
 
     /// 切换模式下临时接管 Esc、方向键、Tab 与回车；面板关闭后立即归还。
@@ -189,26 +212,17 @@ final class OverviewPanelController {
     }
 
     private func advanceSelection(by delta: Int) {
-        guard !items.isEmpty else { return }
-        guard let current = selectedIndex else {
-            selectedIndex = delta >= 0 ? 0 : items.count - 1
-            return
-        }
-        selectedIndex = (current + delta + items.count) % items.count
+        state.advance(by: delta)
+        updateSelection()
     }
 
     private func moveSelectionVertically(by rows: Int) {
-        guard !items.isEmpty else { return }
-        guard let current = selectedIndex else {
-            selectedIndex = 0
-            return
-        }
-        let target = current + rows * columns
-        if items.indices.contains(target) { selectedIndex = target }
+        state.moveVertically(by: rows, columns: columns)
+        updateSelection()
     }
 
     private func launchSelection() {
-        guard let index = selectedIndex, items.indices.contains(index) else { return }
+        guard let index = state.selection, items.indices.contains(index) else { return }
         let item = items[index]
         dismiss()
         onLaunch?(item)
@@ -309,7 +323,7 @@ final class OverviewPanelController {
                 self?.dismiss()
                 self?.onLaunch?(item)
             }
-            tile.onHover = { [weak self] in self?.selectedIndex = index }
+            tile.onHover = { [weak self] in self?.select(index: index) }
             content.addSubview(tile)
             tiles.append(tile)
         }
@@ -317,7 +331,7 @@ final class OverviewPanelController {
 
     private func footerText() -> String {
         guard !items.isEmpty else { return "按 Esc 关闭" }
-        switch activeMode {
+        switch state.mode {
         case .hold:
             let modifiers = triggerHotKey.map { HotKeyFormatter.keyCaps(for: $0).dropLast().joined() } ?? ""
             let key = triggerHotKey.map { HotKeyFormatter.keyName(for: $0.keyCode) } ?? ""
