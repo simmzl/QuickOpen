@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-11-04
+
 ### Added
 - Settings → General shows whether Input Monitoring is allowed for the overview's Hold mode, with a button to grant it.
 - English and Simplified Chinese interface. English by default unless the system language is Chinese; switch in Settings → General.
@@ -55,5 +57,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - Initial release.
 
-[Unreleased]: https://github.com/simmzl/QuickOpen/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/simmzl/QuickOpen/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/simmzl/QuickOpen/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/simmzl/QuickOpen/releases/tag/v1.3.0
