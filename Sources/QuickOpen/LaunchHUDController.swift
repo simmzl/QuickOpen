@@ -49,7 +49,7 @@ final class LaunchHUDController {
         guard let screen = OverlayPanel.activeScreen else { return }
         panel.setFrame(Self.frame(on: screen, position: position), display: false)
 
-        let layer = panel.effectView.layer
+        let layer = panel.surface.layer
         let wasVisible = panel.isVisible && panel.alphaValue > 0.01
         panel.orderFrontRegardless()
 
@@ -131,13 +131,21 @@ final class LaunchHUDController {
     private func buildContent() {
         let content = panel.effectView
         iconView.imageScaling = .scaleProportionallyUpOrDown
+        iconView.wantsLayer = true
+        iconView.shadow = {
+            let shadow = NSShadow()
+            shadow.shadowColor = NSColor.black.withAlphaComponent(0.22)
+            shadow.shadowBlurRadius = 14
+            shadow.shadowOffset = NSSize(width: 0, height: -5)
+            return shadow
+        }()
 
         nameLabel.font = .systemFont(ofSize: 17, weight: .semibold)
         nameLabel.alignment = .center
         nameLabel.lineBreakMode = .byTruncatingTail
         nameLabel.maximumNumberOfLines = 1
 
-        statusLabel.font = .systemFont(ofSize: 12)
+        statusLabel.font = .systemFont(ofSize: 12, weight: .medium)
         statusLabel.textColor = .secondaryLabelColor
         statusLabel.alignment = .center
 

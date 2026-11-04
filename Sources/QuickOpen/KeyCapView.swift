@@ -104,36 +104,57 @@ private final class KeyCap: NSView {
 
     override var wantsUpdateLayer: Bool { true }
 
+    /// 键帽顶面的玻璃光泽：上亮下透。
+    private let sheen = CAGradientLayer()
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        sheen.frame = bounds
+        sheen.cornerRadius = layer?.cornerRadius ?? 0
+        sheen.cornerCurve = .continuous
+        CATransaction.commit()
+    }
+
     override func updateLayer() {
         guard let layer else { return }
         let height = round(fontSize * 1.75)
-        layer.cornerRadius = max(4, height * 0.24)
+        layer.cornerRadius = max(4, height * 0.28)
         layer.cornerCurve = .continuous
         layer.borderWidth = 0.5
+        if sheen.superlayer == nil { layer.insertSublayer(sheen, at: 0) }
 
-        let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        let isDark = Brand.isDark(effectiveAppearance)
+        var top = NSColor.white.withAlphaComponent(isDark ? 0.16 : 0.75)
+        var bottom = NSColor.white.withAlphaComponent(isDark ? 0.04 : 0.25)
         switch style {
         case .regular:
-            layer.backgroundColor = (isDark ? NSColor.white.withAlphaComponent(0.10)
-                                            : NSColor.black.withAlphaComponent(0.05)).cgColor
-            layer.borderColor = (isDark ? NSColor.white.withAlphaComponent(0.14)
-                                        : NSColor.black.withAlphaComponent(0.12)).cgColor
+            layer.backgroundColor = (isDark ? NSColor.white.withAlphaComponent(0.08)
+                                            : NSColor.black.withAlphaComponent(0.035)).cgColor
+            layer.borderColor = (isDark ? NSColor.white.withAlphaComponent(0.16)
+                                        : NSColor.black.withAlphaComponent(0.10)).cgColor
             label.textColor = .labelColor
         case .overlay:
-            layer.backgroundColor = (isDark ? NSColor.white.withAlphaComponent(0.14)
-                                            : NSColor.white.withAlphaComponent(0.65)).cgColor
-            layer.borderColor = (isDark ? NSColor.white.withAlphaComponent(0.18)
-                                        : NSColor.black.withAlphaComponent(0.10)).cgColor
+            layer.backgroundColor = (isDark ? NSColor.white.withAlphaComponent(0.10)
+                                            : NSColor.white.withAlphaComponent(0.35)).cgColor
+            layer.borderColor = (isDark ? NSColor.white.withAlphaComponent(0.22)
+                                        : NSColor.white.withAlphaComponent(0.85)).cgColor
             label.textColor = .labelColor
         case .warning:
             layer.backgroundColor = NSColor.systemRed.withAlphaComponent(isDark ? 0.22 : 0.12).cgColor
             layer.borderColor = NSColor.systemRed.withAlphaComponent(0.45).cgColor
             label.textColor = .systemRed
+            top = NSColor.white.withAlphaComponent(isDark ? 0.06 : 0.35)
+            bottom = .clear
         }
-        // 底部一像素阴影，模拟实体键帽。
+        sheen.colors = [top.cgColor, bottom.cgColor]
+        sheen.startPoint = CGPoint(x: 0.5, y: 1)
+        sheen.endPoint = CGPoint(x: 0.5, y: 0)
+        // 柔和的底部投影，让键帽“浮”起来。
         layer.shadowColor = NSColor.black.cgColor
-        layer.shadowOpacity = isDark ? 0.35 : 0.12
-        layer.shadowRadius = 0
+        layer.shadowOpacity = isDark ? 0.35 : 0.10
+        layer.shadowRadius = 1.5
         layer.shadowOffset = CGSize(width: 0, height: -1)
     }
 }

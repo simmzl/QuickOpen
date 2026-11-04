@@ -236,9 +236,18 @@ final class OverviewPanelController {
         content.subviews.forEach { $0.removeFromSuperview() }
         tiles = []
 
-        let title = NSTextField(labelWithString: "QuickOpen 快捷键")
-        title.font = .systemFont(ofSize: 13, weight: .semibold)
-        title.textColor = .secondaryLabelColor
+        let titleLabel = NSTextField(labelWithString: "QuickOpen")
+        titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        titleLabel.textColor = .secondaryLabelColor
+        let mark = NSImageView(image: NSApp.applicationIconImage ?? NSImage())
+        mark.imageScaling = .scaleProportionallyUpOrDown
+        mark.translatesAutoresizingMaskIntoConstraints = false
+        mark.widthAnchor.constraint(equalToConstant: 18).isActive = true
+        mark.heightAnchor.constraint(equalToConstant: 18).isActive = true
+        let title = NSStackView(views: [mark, titleLabel])
+        title.orientation = .horizontal
+        title.spacing = 6
+        title.alignment = .centerY
 
         let footer = NSTextField(labelWithString: footerText())
         footer.font = .systemFont(ofSize: 11)
@@ -261,7 +270,7 @@ final class OverviewPanelController {
         ]
 
         if items.isEmpty {
-            let empty = NSTextField(labelWithString: "还没有为任何 App 设置快捷键\n在菜单栏 ⌘ 图标 ›「快捷键设置…」中添加")
+            let empty = NSTextField(labelWithString: "还没有为任何 App 设置快捷键\n在菜单栏 QuickOpen 图标 ›「设置…」中添加")
             empty.alignment = .center
             empty.font = .systemFont(ofSize: 13)
             empty.textColor = .secondaryLabelColor
@@ -323,8 +332,10 @@ final class OverviewPanelController {
 private final class OverviewTile: NSView {
     var onClick: (() -> Void)?
     var onHover: (() -> Void)?
-    var isSelected = false { didSet { needsDisplay = true } }
+    var isSelected = false { didSet { updateSelection() } }
 
+    /// 选中态：品牌色淡淡着色的玻璃底。
+    private let highlight = GlassSurface(kind: .control, cornerRadius: 18)
     private let iconView = NSImageView()
     private let nameLabel = NSTextField(labelWithString: "")
     private let keyCaps: KeyCapView
@@ -335,10 +346,28 @@ private final class OverviewTile: NSView {
         super.init(frame: .zero)
         wantsLayer = true
 
+        highlight.tintColor = Brand.coral.withAlphaComponent(0.35)
+        highlight.alphaValue = 0
+        highlight.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(highlight)
+        NSLayoutConstraint.activate([
+            highlight.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
+            highlight.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
+            highlight.topAnchor.constraint(equalTo: topAnchor, constant: 2),
+            highlight.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4)
+        ])
+
         let icon = NSWorkspace.shared.icon(forFile: shortcut.appPath)
         icon.size = NSSize(width: 128, height: 128)
         iconView.image = icon
         iconView.imageScaling = .scaleProportionallyUpOrDown
+        iconView.shadow = {
+            let shadow = NSShadow()
+            shadow.shadowColor = NSColor.black.withAlphaComponent(0.18)
+            shadow.shadowBlurRadius = 8
+            shadow.shadowOffset = NSSize(width: 0, height: -3)
+            return shadow
+        }()
 
         nameLabel.stringValue = shortcut.appName
         nameLabel.font = .systemFont(ofSize: 12, weight: .medium)
@@ -347,8 +376,8 @@ private final class OverviewTile: NSView {
         nameLabel.maximumNumberOfLines = 1
 
         runningDot.wantsLayer = true
-        runningDot.layer?.backgroundColor = NSColor.labelColor.withAlphaComponent(0.55).cgColor
-        runningDot.layer?.cornerRadius = 2
+        runningDot.layer?.backgroundColor = Brand.coral.cgColor
+        runningDot.layer?.cornerRadius = 2.5
         runningDot.isHidden = !isRunning
         runningDot.toolTip = "正在运行"
 
@@ -363,8 +392,8 @@ private final class OverviewTile: NSView {
             iconView.heightAnchor.constraint(equalToConstant: 64),
             runningDot.topAnchor.constraint(equalTo: iconView.bottomAnchor, constant: 3),
             runningDot.centerXAnchor.constraint(equalTo: centerXAnchor),
-            runningDot.widthAnchor.constraint(equalToConstant: 4),
-            runningDot.heightAnchor.constraint(equalToConstant: 4),
+            runningDot.widthAnchor.constraint(equalToConstant: 5),
+            runningDot.heightAnchor.constraint(equalToConstant: 5),
             nameLabel.topAnchor.constraint(equalTo: iconView.bottomAnchor, constant: 11),
             nameLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
             nameLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
@@ -378,13 +407,11 @@ private final class OverviewTile: NSView {
 
     required init?(coder: NSCoder) { nil }
 
-    override func draw(_ dirtyRect: NSRect) {
-        guard isSelected else { return }
-        let rect = bounds.insetBy(dx: 5, dy: 4)
-        let path = NSBezierPath(roundedRect: rect, xRadius: 14, yRadius: 14)
-        let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        (isDark ? NSColor.white.withAlphaComponent(0.14) : NSColor.black.withAlphaComponent(0.08)).setFill()
-        path.fill()
+    private func updateSelection() {
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = OverlayPanel.reduceMotion ? 0 : 0.12
+            highlight.animator().alphaValue = isSelected ? 1 : 0
+        }
     }
 
     // 面板不会成为 key window，必须接受首次点击。

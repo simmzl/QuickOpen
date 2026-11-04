@@ -20,7 +20,7 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
     required init?(coder: NSCoder) { nil }
 
     override func loadView() {
-        let root = NSView(frame: NSRect(x: 0, y: 0, width: 660, height: 480))
+        let root = SettingsBackdrop(frame: NSRect(x: 0, y: 0, width: 660, height: 480))
         view = root
         buildInterface()
         context.onChange.append { [weak self] in self?.refresh() }
@@ -100,7 +100,7 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
         emptyView.onDropApplications = { [weak self] urls in self?.add(urls) }
 
         let addButton = NSButton(title: "添加 App…", target: self, action: #selector(addApplication))
-        addButton.bezelStyle = .rounded
+        addButton.applyGlassStyle(prominent: true)
         addButton.image = NSImage(systemSymbolName: "plus", accessibilityDescription: nil)
         addButton.imagePosition = .imageLeading
         addButton.keyEquivalent = "n"
@@ -121,7 +121,7 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
             view.addSubview($0)
         }
         NSLayoutConstraint.activate([
-            header.topAnchor.constraint(equalTo: view.topAnchor, constant: 20),
+            header.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 18),
             header.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
             header.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -24),
             scrollView.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 14),
@@ -141,7 +141,7 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
 
     private func setHint(_ text: String, highlighted: Bool) {
         hintLabel.stringValue = text
-        hintLabel.textColor = highlighted ? .controlAccentColor : .secondaryLabelColor
+        hintLabel.textColor = highlighted ? Brand.coralDeep : .secondaryLabelColor
     }
 
     // MARK: 表格
@@ -290,19 +290,32 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
 
 // MARK: - 行视图
 
-/// 圆角卡片背景的行。
+/// 玻璃卡片背景的行。
 private final class CardRowView: NSTableRowView {
-    override func drawBackground(in dirtyRect: NSRect) {
-        let rect = bounds.insetBy(dx: 6, dy: 0)
-        let path = NSBezierPath(roundedRect: rect, xRadius: 10, yRadius: 10)
-        let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        (isDark ? NSColor.white.withAlphaComponent(0.05) : NSColor.white).setFill()
-        path.fill()
-        (isDark ? NSColor.white.withAlphaComponent(0.07) : NSColor.black.withAlphaComponent(0.07)).setStroke()
-        path.lineWidth = 1
-        path.stroke()
+    private let card = GlassSurface(kind: .card, cornerRadius: 14)
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        card.translatesAutoresizingMaskIntoConstraints = true
+        addSubview(card, positioned: .below, relativeTo: nil)
     }
 
+    required init?(coder: NSCoder) { nil }
+
+    override func layout() {
+        super.layout()
+        card.frame = bounds.insetBy(dx: 6, dy: 0)
+    }
+
+    override func didAddSubview(_ subview: NSView) {
+        super.didAddSubview(subview)
+        // 单元格视图总是在玻璃卡片之上（用 frame 布局，重新插入不会丢约束）。
+        if subview !== card, subviews.first !== card, card.superview === self {
+            addSubview(card, positioned: .below, relativeTo: nil)
+        }
+    }
+
+    override func drawBackground(in dirtyRect: NSRect) {}
     override func drawSelection(in dirtyRect: NSRect) {}
     override var isEmphasized: Bool { get { false } set {} }
 }
@@ -332,7 +345,7 @@ private final class ShortcutRowView: NSTableCellView {
         detailLabel.lineBreakMode = .byTruncatingMiddle
 
         runningBadge.font = .systemFont(ofSize: 10, weight: .medium)
-        runningBadge.textColor = .systemGreen
+        runningBadge.textColor = Brand.coralDeep
         runningBadge.wantsLayer = true
 
         let nameRow = NSStackView(views: [nameLabel, runningBadge])
@@ -489,7 +502,7 @@ private final class EmptyStateView: NSView {
         detail.maximumNumberOfLines = 2
 
         let button = NSButton(title: "选择 App…", target: self, action: #selector(add))
-        button.bezelStyle = .rounded
+        button.applyGlassStyle(prominent: true)
         button.controlSize = .large
         button.keyEquivalent = "\r"
 
@@ -514,10 +527,10 @@ private final class EmptyStateView: NSView {
         let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 14, yRadius: 14)
         path.setLineDash([6, 4], count: 2, phase: 0)
         path.lineWidth = isDropTarget ? 2 : 1
-        (isDropTarget ? NSColor.controlAccentColor : NSColor.separatorColor).setStroke()
+        (isDropTarget ? Brand.coral : NSColor.separatorColor).setStroke()
         path.stroke()
         if isDropTarget {
-            NSColor.controlAccentColor.withAlphaComponent(0.06).setFill()
+            Brand.coral.withAlphaComponent(0.08).setFill()
             path.fill()
         }
     }

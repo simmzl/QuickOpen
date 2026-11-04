@@ -146,7 +146,7 @@ final class HotKeyControl: NSControl {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         recordingLabel.font = .systemFont(ofSize: 12, weight: .medium)
-        recordingLabel.textColor = .controlAccentColor
+        recordingLabel.textColor = Brand.coralDeep
         [keyCaps, recordingLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             addSubview($0)
@@ -177,21 +177,29 @@ final class HotKeyControl: NSControl {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        let rect = bounds.insetBy(dx: 0.5, dy: 0.5)
-        let path = NSBezierPath(roundedRect: rect, xRadius: 8, yRadius: 8)
-        let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        let base: NSColor = isDark ? .white : .black
-        var fill = base.withAlphaComponent(isDark ? 0.05 : 0.025)
-        if isHovered { fill = base.withAlphaComponent(isDark ? 0.09 : 0.05) }
-        if isPressed { fill = base.withAlphaComponent(isDark ? 0.13 : 0.08) }
-        fill.setFill()
+        let rect = bounds.insetBy(dx: 1, dy: 1)
+        let path = NSBezierPath(roundedRect: rect, xRadius: rect.height / 2, yRadius: rect.height / 2)
+        let isDark = Brand.isDark(effectiveAppearance)
+        // 胶囊形玻璃：半透明底 + 顶部高光
+        var alpha: CGFloat = isDark ? 0.07 : 0.45
+        if isHovered { alpha += isDark ? 0.05 : 0.20 }
+        if isPressed { alpha += isDark ? 0.05 : 0.15 }
+        NSColor.white.withAlphaComponent(alpha).setFill()
         path.fill()
+        if isRecording {
+            Brand.coral.withAlphaComponent(0.12).setFill()
+            path.fill()
+        }
+        NSGradient(colors: [
+            NSColor.white.withAlphaComponent(isDark ? 0.10 : 0.6),
+            NSColor.white.withAlphaComponent(0)
+        ])?.draw(in: path, angle: -90)
 
         if isRecording {
-            NSColor.controlAccentColor.setStroke()
+            Brand.coral.setStroke()
             path.lineWidth = 2
         } else {
-            base.withAlphaComponent(isDark ? 0.12 : 0.10).setStroke()
+            (isDark ? NSColor.white.withAlphaComponent(0.16) : NSColor.black.withAlphaComponent(0.08)).setStroke()
             path.lineWidth = 1
         }
         path.stroke()

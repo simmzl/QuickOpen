@@ -30,7 +30,7 @@ final class GeneralViewController: NSViewController {
     required init?(coder: NSCoder) { nil }
 
     override func loadView() {
-        view = NSView(frame: NSRect(x: 0, y: 0, width: 660, height: 480))
+        view = SettingsBackdrop(frame: NSRect(x: 0, y: 0, width: 660, height: 480))
         buildInterface()
         context.onChange.append { [weak self] in self?.refresh() }
     }
@@ -94,7 +94,7 @@ final class GeneralViewController: NSViewController {
         toggleRadio.target = self
         toggleRadio.action = #selector(changeMode(_:))
         let openOverview = NSButton(title: "打开速查面板", target: self, action: #selector(showOverview))
-        openOverview.bezelStyle = .rounded
+        openOverview.applyGlassStyle()
 
         hudCheckbox.target = self
         hudCheckbox.action = #selector(toggleHUD)
@@ -110,7 +110,7 @@ final class GeneralViewController: NSViewController {
         durationSlider.widthAnchor.constraint(equalToConstant: 180).isActive = true
         durationLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
         durationLabel.textColor = .secondaryLabelColor
-        previewButton.bezelStyle = .rounded
+        previewButton.applyGlassStyle()
         previewButton.target = self
         previewButton.action = #selector(previewHUD)
 
@@ -147,7 +147,7 @@ final class GeneralViewController: NSViewController {
         content.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(content)
         NSLayoutConstraint.activate([
-            content.topAnchor.constraint(equalTo: view.topAnchor, constant: 22),
+            content.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 18),
             content.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
             content.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24)
         ])
@@ -196,18 +196,18 @@ final class GeneralViewController: NSViewController {
         let header = NSTextField(labelWithString: title)
         header.font = .systemFont(ofSize: 13, weight: .semibold)
 
-        let box = SectionCard()
+        let box = GlassSurface(kind: .card, cornerRadius: 16)
         let inner = NSStackView(views: rows)
         inner.orientation = .vertical
         inner.alignment = .leading
         inner.spacing = 10
         inner.translatesAutoresizingMaskIntoConstraints = false
-        box.addSubview(inner)
+        box.contentView.addSubview(inner)
         NSLayoutConstraint.activate([
-            inner.topAnchor.constraint(equalTo: box.topAnchor, constant: 14),
-            inner.leadingAnchor.constraint(equalTo: box.leadingAnchor, constant: 16),
-            inner.trailingAnchor.constraint(lessThanOrEqualTo: box.trailingAnchor, constant: -16),
-            inner.bottomAnchor.constraint(equalTo: box.bottomAnchor, constant: -14)
+            inner.topAnchor.constraint(equalTo: box.contentView.topAnchor, constant: 14),
+            inner.leadingAnchor.constraint(equalTo: box.contentView.leadingAnchor, constant: 16),
+            inner.trailingAnchor.constraint(lessThanOrEqualTo: box.contentView.trailingAnchor, constant: -16),
+            inner.bottomAnchor.constraint(equalTo: box.contentView.bottomAnchor, constant: -14)
         ])
 
         let wrapper = NSStackView(views: [header, box])
@@ -246,13 +246,13 @@ final class GeneralViewController: NSViewController {
 
     @objc private func recordOverview() {
         overviewNote.stringValue = "按下新快捷键 · Esc 取消 · Delete 关闭速查面板快捷键"
-        overviewNote.textColor = .controlAccentColor
+        overviewNote.textColor = Brand.coralDeep
         let previous = context.preferences.overviewHotKey
         context.beginRecording(
             target: SettingsContext.overviewHotKeyID,
             onHint: { [weak self] message in
                 self?.overviewNote.stringValue = message
-                self?.overviewNote.textColor = .controlAccentColor
+                self?.overviewNote.textColor = Brand.coralDeep
             },
             apply: { [weak self] hotKey in self?.context.preferences.overviewHotKey = hotKey },
             revert: { [weak self] in self?.context.preferences.overviewHotKey = previous },
@@ -292,18 +292,5 @@ final class GeneralViewController: NSViewController {
                 hotKey: context.preferences.overviewHotKey
             )
         context.previewHUD(sample)
-    }
-}
-
-private final class SectionCard: NSView {
-    override var isFlipped: Bool { true }
-
-    override func draw(_ dirtyRect: NSRect) {
-        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 10, yRadius: 10)
-        let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        (isDark ? NSColor.white.withAlphaComponent(0.05) : NSColor.white).setFill()
-        path.fill()
-        (isDark ? NSColor.white.withAlphaComponent(0.07) : NSColor.black.withAlphaComponent(0.07)).setStroke()
-        path.stroke()
     }
 }

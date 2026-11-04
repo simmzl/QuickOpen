@@ -1,11 +1,14 @@
 import AppKit
 
-/// 不抢焦点、跨桌面空间（含全屏 App）显示的毛玻璃浮层基类。
-/// 速查面板与启动提示共用。
+/// 不抢焦点、跨桌面空间（含全屏 App）显示的玻璃浮层基类。
+/// 速查面板与启动提示共用。内容请添加到 `effectView`（玻璃表面的内容视图）。
 class OverlayPanel: NSPanel {
-    let effectView = NSVisualEffectView()
+    let surface: GlassSurface
+    /// 内容容器（位于玻璃之上）。
+    var effectView: NSView { surface.contentView }
 
     init(cornerRadius: CGFloat) {
+        surface = GlassSurface(kind: .floating, cornerRadius: cornerRadius)
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 200, height: 200),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -17,24 +20,25 @@ class OverlayPanel: NSPanel {
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle, .transient]
         isOpaque = false
         backgroundColor = .clear
-        hasShadow = true
+        // 液态玻璃自带投影；旧系统使用窗口投影。
+        hasShadow = !GlassSurface.usesSystemGlass
         hidesOnDeactivate = false
         isReleasedWhenClosed = false
         animationBehavior = .none
         isMovable = false
 
-        effectView.material = .hudWindow
-        effectView.blendingMode = .behindWindow
-        effectView.state = .active
-        effectView.wantsLayer = true
-        effectView.layer?.cornerRadius = cornerRadius
-        effectView.layer?.cornerCurve = .continuous
-        effectView.layer?.masksToBounds = true
-        // 细描边，让浮层在相近颜色的背景上也有清晰边界。
-        effectView.layer?.borderWidth = 0.5
-        effectView.layer?.borderColor = NSColor.white.withAlphaComponent(0.18).cgColor
-        effectView.maskImage = Self.roundedMask(radius: cornerRadius)
-        contentView = effectView
+        // 根视图透明，玻璃四周留出投影空间。
+        let root = NSView()
+        root.wantsLayer = true
+        surface.translatesAutoresizingMaskIntoConstraints = false
+        root.addSubview(surface)
+        NSLayoutConstraint.activate([
+            surface.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            surface.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            surface.topAnchor.constraint(equalTo: root.topAnchor),
+            surface.bottomAnchor.constraint(equalTo: root.bottomAnchor)
+        ])
+        contentView = root
     }
 
     override var canBecomeKey: Bool { false }
@@ -48,18 +52,5 @@ class OverlayPanel: NSPanel {
 
     static var reduceMotion: Bool {
         NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-    }
-
-    /// 可拉伸的圆角蒙版，保证毛玻璃本身也是圆角（阴影随之变圆）。
-    private static func roundedMask(radius: CGFloat) -> NSImage {
-        let edge = radius * 2 + 1
-        let image = NSImage(size: NSSize(width: edge, height: edge), flipped: false) { rect in
-            NSColor.black.setFill()
-            NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
-            return true
-        }
-        image.capInsets = NSEdgeInsets(top: radius, left: radius, bottom: radius, right: radius)
-        image.resizingMode = .stretch
-        return image
     }
 }

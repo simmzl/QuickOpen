@@ -117,9 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func createStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = item.button {
-            let image = NSImage(systemSymbolName: "command.circle", accessibilityDescription: "QuickOpen")
-            image?.isTemplate = true
-            button.image = image
+            button.image = StatusBarIcon.make()
             button.toolTip = "QuickOpen"
         }
         statusItem = item

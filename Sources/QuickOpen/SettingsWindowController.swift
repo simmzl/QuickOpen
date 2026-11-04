@@ -27,7 +27,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTo
     private let shortcutsController: ShortcutsViewController
     private let generalController: GeneralViewController
     private var currentTab: Tab = .shortcuts
-    private static let contentSize = NSSize(width: 660, height: 500)
+    private static let contentSize = NSSize(width: 680, height: 580)
 
     var onShowOverview: (() -> Void)? {
         get { generalController.onShowOverview }
@@ -41,12 +41,16 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTo
 
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: Self.contentSize),
-            styleMask: [.titled, .closable, .miniaturizable],
+            styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.isReleasedWhenClosed = false
         window.toolbarStyle = .preference
+        // 让磨砂背景延伸到标题栏下方，整窗一体。
+        window.titlebarAppearsTransparent = true
+        window.isOpaque = false
+        window.backgroundColor = .clear
         window.titleVisibility = .visible
         super.init(window: window)
         window.delegate = self
