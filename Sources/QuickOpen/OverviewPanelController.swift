@@ -256,7 +256,7 @@ final class OverviewPanelController {
         let titleLabel = NSTextField(labelWithString: "QuickOpen")
         titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
         titleLabel.textColor = .secondaryLabelColor
-        let mark = NSImageView(image: NSApp.applicationIconImage ?? NSImage())
+        let mark = NSImageView(image: AppIcons.brandLogo)
         mark.imageScaling = .scaleProportionallyUpOrDown
         mark.translatesAutoresizingMaskIntoConstraints = false
         mark.widthAnchor.constraint(equalToConstant: 18).isActive = true
@@ -287,7 +287,7 @@ final class OverviewPanelController {
         ]
 
         if items.isEmpty {
-            let empty = NSTextField(labelWithString: "还没有为任何 App 设置快捷键\n在菜单栏 QuickOpen 图标 ›「设置…」中添加")
+            let empty = NSTextField(labelWithString: L("No shortcuts yet\nAdd apps from the QuickOpen menu bar icon › Settings…", "还没有为任何 App 设置快捷键\n在菜单栏 QuickOpen 图标 ›「设置…」中添加"))
             empty.alignment = .center
             empty.font = .systemFont(ofSize: 13)
             empty.textColor = .secondaryLabelColor
@@ -330,17 +330,17 @@ final class OverviewPanelController {
     }
 
     private func footerText() -> String {
-        guard !items.isEmpty else { return "按 Esc 关闭" }
+        guard !items.isEmpty else { return L("Press Esc to close", "按 Esc 关闭") }
         switch state.mode {
         case .hold:
             let modifiers = triggerHotKey.map { HotKeyFormatter.keyCaps(for: $0).dropLast().joined() } ?? ""
             let key = triggerHotKey.map { HotKeyFormatter.keyName(for: $0.keyCode) } ?? ""
             if modifiers.isEmpty {
-                return "按住 \(key) 显示 · 松开关闭 · 轻按一下则常驻"
+                return L("Hold \(key) to show · release to close · tap to keep open", "按住 \(key) 显示 · 松开关闭 · 轻按一下则常驻")
             }
-            return "按住 \(modifiers) 连按 \(key) 选择 · 松开打开 · 轻按一下则常驻"
+            return L("Hold \(modifiers), press \(key) to select · release to open · tap to keep open", "按住 \(modifiers) 连按 \(key) 选择 · 松开打开 · 轻按一下则常驻")
         case .toggle:
-            return "方向键选择 · ↩ 打开 · Esc 关闭"
+            return L("Arrow keys to select · ↩ to open · Esc to close", "方向键选择 · ↩ 打开 · Esc 关闭")
         }
     }
 }
@@ -357,7 +357,7 @@ private final class OverviewTile: NSView {
     private let iconView = NSImageView()
     private let nameLabel = NSTextField(labelWithString: "")
     private let keyCaps: KeyCapView
-    private let runningDot = NSView()
+    private let runningDot = DotView()
 
     init(shortcut: AppShortcut, isRunning: Bool) {
         keyCaps = KeyCapView(hotKey: shortcut.hotKey, style: .overlay, fontSize: 11)
@@ -382,9 +382,7 @@ private final class OverviewTile: NSView {
             ])
         }
 
-        let icon = NSWorkspace.shared.icon(forFile: shortcut.appPath)
-        icon.size = NSSize(width: 128, height: 128)
-        iconView.image = icon
+        iconView.image = AppIcons.icon(forPath: shortcut.appPath, size: 64)
         iconView.imageScaling = .scaleProportionallyUpOrDown
         iconView.shadow = {
             let shadow = NSShadow()
@@ -404,7 +402,7 @@ private final class OverviewTile: NSView {
 
         runningDot.layer?.cornerRadius = 2.5
         runningDot.isHidden = !isRunning
-        runningDot.toolTip = "正在运行"
+        runningDot.toolTip = L("Running", "正在运行")
 
         [iconView, nameLabel, keyCaps, runningDot].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
@@ -431,16 +429,6 @@ private final class OverviewTile: NSView {
     }
 
     required init?(coder: NSCoder) { nil }
-
-    override func viewDidChangeEffectiveAppearance() {
-        super.viewDidChangeEffectiveAppearance()
-        runningDot.layer?.backgroundColor = Theme.runningIndicator.resolved(for: effectiveAppearance)
-    }
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        runningDot.layer?.backgroundColor = Theme.runningIndicator.resolved(for: effectiveAppearance)
-    }
 
     private func updateSelection() {
         NSAnimationContext.runAnimationGroup { context in

@@ -8,8 +8,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTo
 
         var title: String {
             switch self {
-            case .shortcuts: return "快捷键"
-            case .general: return "通用"
+            case .shortcuts: return L("Shortcuts", "快捷键")
+            case .general: return L("General", "通用")
             }
         }
 

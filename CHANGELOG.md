@@ -5,6 +5,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+- English and Simplified Chinese interface. English by default unless the system language is Chinese; switch in Settings → General.
+
+### Fixed
+- Overview (hold mode): selecting with `Space` and releasing the modifiers could open nothing, open late, or leave the panel open in toggle mode. Presses still in the event queue when the modifiers are released are now counted, and a quick tap is only treated as "keep open" when nothing was selected.
+- App icons in the overview and launch hint could appear blank the first time they were shown.
+
 ## [1.3.0] - 2026-11-04
 
 ### Added

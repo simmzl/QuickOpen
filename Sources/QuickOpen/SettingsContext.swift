@@ -105,7 +105,7 @@ final class SettingsContext {
                     revert()
                     self.reload()
                     Self.showAlert(
-                        message: "快捷键 \(hotKey.displayString) 不可用",
+                        message: L("\(hotKey.displayString) is unavailable", "快捷键 \(hotKey.displayString) 不可用"),
                         detail: status.hotKeyFailureDescription,
                         window: window
                     )
@@ -136,10 +136,10 @@ final class HotKeyControl: NSControl {
     var hotKey: HotKey? { didSet { refresh() } }
     var isRecording = false { didSet { refresh() } }
     var isWarning = false { didSet { refresh() } }
-    var placeholder = "点击录制" { didSet { refresh() } }
+    var placeholder = L("Click to record", "点击录制") { didSet { refresh() } }
 
     private let keyCaps = KeyCapView(fontSize: 12)
-    private let recordingLabel = NSTextField(labelWithString: "请按快捷键…")
+    private let recordingLabel = NSTextField(labelWithString: L("Press shortcut…", "请按快捷键…"))
     private var isPressed = false { didSet { needsDisplay = true } }
     private var isHovered = false { didSet { needsDisplay = true } }
 
@@ -172,7 +172,7 @@ final class HotKeyControl: NSControl {
         keyCaps.style = isWarning ? .warning : .regular
         keyCaps.isHidden = isRecording
         recordingLabel.isHidden = !isRecording
-        setAccessibilityLabel(isRecording ? "正在录制快捷键" : (hotKey?.displayString ?? placeholder))
+        setAccessibilityLabel(isRecording ? L("Recording shortcut", "正在录制快捷键") : (hotKey?.displayString ?? placeholder))
         needsDisplay = true
     }
 

@@ -6,25 +6,27 @@ final class GeneralViewController: NSViewController {
     /// 请求打开速查面板（预览）。
     var onShowOverview: (() -> Void)?
 
-    private let loginCheckbox = NSButton(checkboxWithTitle: "登录时启动 QuickOpen", target: nil, action: nil)
+    private let loginCheckbox = NSButton(checkboxWithTitle: L("Launch QuickOpen at login", "登录时启动 QuickOpen"), target: nil, action: nil)
     private let loginNote = NSTextField(labelWithString: "")
-    private let hideCheckbox = NSButton(checkboxWithTitle: "App 已在最前面时，再按一次快捷键将其隐藏", target: nil, action: nil)
+    private let hideCheckbox = NSButton(checkboxWithTitle: L("Press the shortcut again to hide an app that’s already in front", "App 已在最前面时，再按一次快捷键将其隐藏"), target: nil, action: nil)
 
     private let overviewControl = HotKeyControl()
     private let overviewNote = NSTextField(labelWithString: "")
     private let holdRadio = NSButton(radioButtonWithTitle: OverviewMode.hold.title, target: nil, action: nil)
     private let toggleRadio = NSButton(radioButtonWithTitle: OverviewMode.toggle.title, target: nil, action: nil)
 
-    private let hudCheckbox = NSButton(checkboxWithTitle: "按下 App 快捷键时，在屏幕上显示 App 图标与快捷键", target: nil, action: nil)
+    private let hudCheckbox = NSButton(checkboxWithTitle: L("Show the app icon and shortcut on screen when you use a shortcut", "按下 App 快捷键时，在屏幕上显示 App 图标与快捷键"), target: nil, action: nil)
     private let positionPopup = NSPopUpButton()
     private let durationSlider = NSSlider()
     private let durationLabel = NSTextField(labelWithString: "")
-    private let previewButton = NSButton(title: "预览", target: nil, action: nil)
+    private let previewButton = NSButton(title: L("Preview", "预览"), target: nil, action: nil)
+    private let languagePopup = NSPopUpButton()
+    private let languageNote = NSTextField(labelWithString: "")
 
     init(context: SettingsContext) {
         self.context = context
         super.init(nibName: nil, bundle: nil)
-        title = "通用"
+        title = L("General", "通用")
     }
 
     required init?(coder: NSCoder) { nil }
@@ -44,16 +46,16 @@ final class GeneralViewController: NSViewController {
         let preferences = context.preferences
         loginCheckbox.state = LoginItem.isEnabled ? .on : .off
         if LoginItem.requiresApproval {
-            loginNote.stringValue = "需要在“系统设置 › 通用 › 登录项”中允许 QuickOpen。"
+            loginNote.stringValue = L("Allow QuickOpen in System Settings › General › Login Items.", "需要在“系统设置 › 通用 › 登录项”中允许 QuickOpen。")
             loginNote.textColor = .systemOrange
         } else {
-            loginNote.stringValue = "将 QuickOpen 放在“应用程序”文件夹中后再开启。"
+            loginNote.stringValue = L("Move QuickOpen to the Applications folder before turning this on.", "将 QuickOpen 放在“应用程序”文件夹中后再开启。")
             loginNote.textColor = .secondaryLabelColor
         }
         hideCheckbox.state = preferences.hidesWhenFrontmost ? .on : .off
 
         overviewControl.hotKey = preferences.overviewHotKey
-        overviewControl.placeholder = "已关闭 · 点击录制"
+        overviewControl.placeholder = L("Off · Click to record", "已关闭 · 点击录制")
         overviewControl.isRecording = context.recordingTarget == SettingsContext.overviewHotKeyID
         if let status = context.registrationFailures[SettingsContext.overviewHotKeyID] {
             overviewControl.isWarning = true
@@ -65,7 +67,7 @@ final class GeneralViewController: NSViewController {
                 overviewNote.stringValue = "⚠︎ " + warning
                 overviewNote.textColor = .systemOrange
             } else {
-                overviewNote.stringValue = "一键查看所有 App 的快捷键。支持单键或组合键 · 点击修改"
+                overviewNote.stringValue = L("See every app’s shortcut at a glance. Single keys or combinations · Click to change", "一键查看所有 App 的快捷键。支持单键或组合键 · 点击修改")
                 overviewNote.textColor = .secondaryLabelColor
             }
         }
@@ -75,7 +77,7 @@ final class GeneralViewController: NSViewController {
         hudCheckbox.state = preferences.showsLaunchHUD ? .on : .off
         positionPopup.selectItem(at: HUDPosition.allCases.firstIndex(of: preferences.hudPosition) ?? 0)
         durationSlider.doubleValue = preferences.hudDuration
-        durationLabel.stringValue = String(format: "%.1f 秒", preferences.hudDuration)
+        durationLabel.stringValue = String(format: L("%.1f s", "%.1f 秒"), preferences.hudDuration)
         [positionPopup, durationSlider, previewButton].forEach { $0.isEnabled = preferences.showsLaunchHUD }
     }
 
@@ -93,7 +95,7 @@ final class GeneralViewController: NSViewController {
         holdRadio.action = #selector(changeMode(_:))
         toggleRadio.target = self
         toggleRadio.action = #selector(changeMode(_:))
-        let openOverview = NSButton(title: "打开速查面板", target: self, action: #selector(showOverview))
+        let openOverview = NSButton(title: L("Open Overview", "打开速查面板"), target: self, action: #selector(showOverview))
         openOverview.applyGlassStyle()
 
         hudCheckbox.target = self
@@ -122,22 +124,31 @@ final class GeneralViewController: NSViewController {
             $0.preferredMaxLayoutWidth = 470
         }
 
-        let general = section("通用", rows: [
+        languagePopup.addItems(withTitles: AppLanguage.allCases.map(\.title))
+        languagePopup.selectItem(at: AppLanguage.allCases.firstIndex(of: AppLanguage.choice) ?? 0)
+        languagePopup.target = self
+        languagePopup.action = #selector(changeLanguage)
+        languageNote.font = .systemFont(ofSize: 11)
+        languageNote.textColor = .secondaryLabelColor
+        languageNote.isHidden = true
+
+        let general = section(L("General", "通用"), rows: [
+            labeled(L("Language", "语言"), stack([languagePopup, languageNote], spacing: 10)),
             stack([loginCheckbox]),
             indent(loginNote),
             stack([hideCheckbox])
         ])
 
-        let overview = section("速查面板", rows: [
-            labeled("快捷键", stack([overviewControl, openOverview], spacing: 10)),
+        let overview = section(L("Overview", "速查面板"), rows: [
+            labeled(L("Shortcut", "快捷键"), stack([overviewControl, openOverview], spacing: 10)),
             labeled("", overviewNote),
-            labeled("呼出方式", stack([holdRadio, toggleRadio], vertical: true, spacing: 6))
+            labeled(L("Behavior", "呼出方式"), stack([holdRadio, toggleRadio], vertical: true, spacing: 6))
         ])
 
-        let hud = section("启动提示", rows: [
+        let hud = section(L("Launch Hint", "启动提示"), rows: [
             stack([hudCheckbox]),
-            labeled("位置", positionPopup),
-            labeled("停留时间", stack([durationSlider, durationLabel, previewButton], spacing: 10))
+            labeled(L("Position", "位置"), positionPopup),
+            labeled(L("Duration", "停留时间"), stack([durationSlider, durationLabel, previewButton], spacing: 10))
         ])
 
         let content = NSStackView(views: [general, overview, hud])
@@ -182,7 +193,7 @@ final class GeneralViewController: NSViewController {
         label.font = .systemFont(ofSize: 13)
         label.alignment = .right
         label.translatesAutoresizingMaskIntoConstraints = false
-        label.widthAnchor.constraint(equalToConstant: 64).isActive = true
+        label.widthAnchor.constraint(equalToConstant: AppLanguage.current == .simplifiedChinese ? 64 : 72).isActive = true
         let row = NSStackView(views: [label, control])
         row.orientation = .horizontal
         row.alignment = control is NSStackView && (control as? NSStackView)?.orientation == .vertical
@@ -226,13 +237,32 @@ final class GeneralViewController: NSViewController {
             try LoginItem.setEnabled(loginCheckbox.state == .on)
         } catch {
             SettingsContext.showAlert(
-                message: "无法更改登录项",
-                detail: error.localizedDescription + "\n\n请确认 QuickOpen 位于“应用程序”文件夹中。",
+                message: L("Couldn’t change the login item", "无法更改登录项"),
+                detail: error.localizedDescription + L("\n\nMake sure QuickOpen is in the Applications folder.", "\n\n请确认 QuickOpen 位于“应用程序”文件夹中。"),
                 window: view.window
             )
         }
         if LoginItem.requiresApproval { LoginItem.openSystemSettings() }
         context.notify()
+    }
+
+    @objc private func changeLanguage() {
+        let index = languagePopup.indexOfSelectedItem
+        guard AppLanguage.allCases.indices.contains(index) else { return }
+        let choice = AppLanguage.allCases[index]
+        guard choice != AppLanguage.choice else { return }
+        AppLanguage.choice = choice
+        languageNote.stringValue = L("Takes effect after restart.", "重启 QuickOpen 后生效。")
+        languageNote.isHidden = false
+
+        let alert = NSAlert()
+        alert.messageText = L("Restart QuickOpen to change the language?", "重启 QuickOpen 以切换语言？")
+        alert.addButton(withTitle: L("Restart Now", "立即重启"))
+        alert.addButton(withTitle: L("Later", "稍后"))
+        guard let window = view.window else { return }
+        alert.beginSheetModal(for: window) { response in
+            if response == .alertFirstButtonReturn { AppRelauncher.relaunch() }
+        }
     }
 
     @objc private func toggleHide() {
@@ -245,7 +275,7 @@ final class GeneralViewController: NSViewController {
     }
 
     @objc private func recordOverview() {
-        overviewNote.stringValue = "按下新快捷键 · Esc 取消 · Delete 关闭速查面板快捷键"
+        overviewNote.stringValue = L("Press a new shortcut · Esc to cancel · Delete to turn off", "按下新快捷键 · Esc 取消 · Delete 关闭速查面板快捷键")
         overviewNote.textColor = Theme.accentText
         let previous = context.preferences.overviewHotKey
         context.beginRecording(
@@ -279,7 +309,7 @@ final class GeneralViewController: NSViewController {
         // 以 0.1 秒为步进。
         let value = (durationSlider.doubleValue * 10).rounded() / 10
         context.preferences.hudDuration = value
-        durationLabel.stringValue = String(format: "%.1f 秒", value)
+        durationLabel.stringValue = String(format: L("%.1f s", "%.1f 秒"), value)
     }
 
     @objc private func previewHUD() {

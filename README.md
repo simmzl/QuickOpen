@@ -34,11 +34,12 @@
   - Or simply press any app's shortcut, or click its icon.
 - **Launch hint.** Each time you use a shortcut, the app's icon and keys flash briefly on screen, so shortcuts stick in your memory. Position and duration are adjustable.
 - **Liquid Glass UI** on macOS 26, with a graceful fallback on macOS 13–15. Follows light/dark mode.
+- **English and Simplified Chinese.** Follows your system language by default; switch in Settings → General.
 - **Thoughtful details:** conflict detection, warnings for shortcuts taken by other apps, drag to reorder, drag apps in from Finder, launch at login.
 - **Private and light:** no Accessibility permission, no network access, no third-party dependencies. Pure AppKit + Carbon, about 1 MB.
 
 <p align="center">
-  <img src="docs/images/overview-dark.png" width="720" alt="Shortcut overview">
+  <img src="docs/images/overview-en.png" width="720" alt="Shortcut overview">
 </p>
 
 <details>
@@ -46,9 +47,9 @@
 
 | Shortcuts | General |
 |---|---|
-| <img src="docs/images/settings-shortcuts-light.png" width="420" alt="Shortcut settings"> | <img src="docs/images/settings-general-light.png" width="420" alt="General settings"> |
+| <img src="docs/images/settings-shortcuts-en.png" width="420" alt="Shortcut settings"> | <img src="docs/images/settings-general-en.png" width="420" alt="General settings"> |
 
-<p align="center"><img src="docs/images/hud-dark.png" width="240" alt="Launch hint"></p>
+<p align="center"><img src="docs/images/hud-en.png" width="240" alt="Launch hint"></p>
 
 </details>
 
@@ -74,7 +75,7 @@ Requires macOS 13 Ventura or later, on Apple Silicon or Intel.
 Tips:
 
 - Single letter or number keys work, but they will be captured system-wide (you won't be able to type that character). Function keys (`F1`–`F20`) are a safe choice for single-key shortcuts.
-- Settings → **General** lets you change the overview shortcut and mode, the launch hint, hide-on-repeat, and launch at login.
+- Settings → **General** lets you change the language, the overview shortcut and mode, the launch hint, hide-on-repeat, and launch at login.
 - Shortcuts are stored in `~/Library/Application Support/QuickOpen/shortcuts.json`. If the file is ever unreadable, it is backed up as `shortcuts.corrupted-<time>.json` instead of being overwritten.
 
 ## Build from source
@@ -103,6 +104,12 @@ Layout screenshots of the main views can be rendered with:
 
 ```bash
 QUICKOPEN_SNAPSHOT_DIR=/tmp/quickopen-shots swift test --filter SnapshotTests
+```
+
+README screenshots (English and Chinese) are generated with:
+
+```bash
+QUICKOPEN_README_IMAGES=1 QUICKOPEN_SNAPSHOT_DIR=/tmp/qo swift test --filter testRenderReadmeImages
 ```
 
 ## Releasing

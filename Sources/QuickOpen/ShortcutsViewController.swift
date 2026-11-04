@@ -9,12 +9,12 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
     private let emptyView = EmptyStateView()
     private let hintLabel = NSTextField(labelWithString: "")
     private static let rowDragType = NSPasteboard.PasteboardType("com.simmzl.quickopen.row")
-    private static let defaultHint = "支持单键或组合键 · 拖动可排序 · 可把 App 直接拖进来"
+    private static var defaultHint: String { L("Single keys or combinations · Drag to reorder · Drop apps here to add", "支持单键或组合键 · 拖动可排序 · 可把 App 直接拖进来") }
 
     init(context: SettingsContext) {
         self.context = context
         super.init(nibName: nil, bundle: nil)
-        title = "快捷键"
+        title = L("Shortcuts", "快捷键")
     }
 
     required init?(coder: NSCoder) { nil }
@@ -61,9 +61,9 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
     // MARK: 界面
 
     private func buildInterface() {
-        let titleLabel = NSTextField(labelWithString: "App 快捷键")
+        let titleLabel = NSTextField(labelWithString: L("App Shortcuts", "App 快捷键"))
         titleLabel.font = .systemFont(ofSize: 20, weight: .semibold)
-        let subtitleLabel = NSTextField(labelWithString: "按下快捷键，目标 App 立即来到前台；未运行时自动启动。")
+        let subtitleLabel = NSTextField(labelWithString: L("Press a shortcut to bring its app to the front, or launch it if it isn’t running.", "按下快捷键，目标 App 立即来到前台；未运行时自动启动。"))
         subtitleLabel.font = .systemFont(ofSize: 12)
         subtitleLabel.textColor = .secondaryLabelColor
         let header = NSStackView(views: [titleLabel, subtitleLabel])
@@ -99,7 +99,7 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
         emptyView.onAdd = { [weak self] in self?.addApplication() }
         emptyView.onDropApplications = { [weak self] urls in self?.add(urls) }
 
-        let addButton = NSButton(title: "添加 App…", target: self, action: #selector(addApplication))
+        let addButton = NSButton(title: L("Add App…", "添加 App…"), target: self, action: #selector(addApplication))
         addButton.applyGlassStyle()
         addButton.image = NSImage(systemSymbolName: "plus", accessibilityDescription: nil)
         addButton.imagePosition = .imageLeading
@@ -240,8 +240,8 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
     @objc func addApplication() {
         guard let window = view.window else { return }
         let panel = NSOpenPanel()
-        panel.title = "选择要绑定快捷键的 App"
-        panel.prompt = "添加"
+        panel.title = L("Choose apps to assign shortcuts to", "选择要绑定快捷键的 App")
+        panel.prompt = L("Add", "添加")
         panel.directoryURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
         panel.allowedContentTypes = [.applicationBundle]
         panel.allowsMultipleSelection = true
@@ -263,7 +263,7 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
             }
             beginRecording(id: addedIDs[0])
         } else if addedIDs.isEmpty, !urls.isEmpty {
-            SettingsContext.showAlert(message: "没有添加新 App", detail: "所选 App 已经在列表中。", window: view.window)
+            SettingsContext.showAlert(message: L("No new apps added", "没有添加新 App"), detail: L("The selected apps are already in the list.", "所选 App 已经在列表中。"), window: view.window)
         }
     }
 
@@ -276,7 +276,7 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
     }
 
     private func beginRecording(id: UUID) {
-        setHint("按下新快捷键 · Esc 取消 · Delete 清除", highlighted: true)
+        setHint(L("Press a new shortcut · Esc to cancel · Delete to clear", "按下新快捷键 · Esc 取消 · Delete 清除"), highlighted: true)
         let previous = context.store.shortcut(id: id)?.hotKey
         context.beginRecording(
             target: id,
@@ -330,7 +330,7 @@ private final class ShortcutRowView: NSTableCellView {
     private let nameLabel = NSTextField(labelWithString: "")
     private let detailLabel = NSTextField(labelWithString: "")
     /// 中性的“运行中”小圆点。
-    private let runningBadge = NSView()
+    private let runningBadge = DotView()
     private let hotKeyControl = HotKeyControl()
     private let deleteButton = NSButton()
     private var hoverArea: NSTrackingArea?
@@ -346,9 +346,8 @@ private final class ShortcutRowView: NSTableCellView {
         detailLabel.lineBreakMode = .byTruncatingMiddle
 
         runningBadge.wantsLayer = true
-        runningBadge.layer?.cornerRadius = 3
-        runningBadge.toolTip = "正在运行"
-        runningBadge.setAccessibilityLabel("正在运行")
+        runningBadge.toolTip = L("Running", "正在运行")
+        runningBadge.setAccessibilityLabel(L("Running", "正在运行"))
         runningBadge.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             runningBadge.widthAnchor.constraint(equalToConstant: 6),
@@ -367,7 +366,7 @@ private final class ShortcutRowView: NSTableCellView {
         hotKeyControl.target = self
         hotKeyControl.action = #selector(record)
 
-        deleteButton.image = NSImage(systemSymbolName: "trash", accessibilityDescription: "删除")
+        deleteButton.image = NSImage(systemSymbolName: "trash", accessibilityDescription: L("Remove", "删除"))
         deleteButton.bezelStyle = .inline
         deleteButton.isBordered = false
         deleteButton.contentTintColor = .secondaryLabelColor
@@ -405,13 +404,10 @@ private final class ShortcutRowView: NSTableCellView {
     required init?(coder: NSCoder) { nil }
 
     func configure(shortcut: AppShortcut, isRunning: Bool, isRecording: Bool, failure: OSStatus?) {
-        let icon = NSWorkspace.shared.icon(forFile: shortcut.appPath)
-        icon.size = NSSize(width: 72, height: 72)
-        iconView.image = icon
+        iconView.image = AppIcons.icon(forPath: shortcut.appPath, size: 36)
         nameLabel.stringValue = shortcut.appName
         runningBadge.isHidden = !isRunning
-        runningBadge.layer?.backgroundColor = Theme.runningIndicator.resolved(for: effectiveAppearance)
-        deleteButton.toolTip = "删除 \(shortcut.appName)"
+        deleteButton.toolTip = L("Remove \(shortcut.appName)", "删除 \(shortcut.appName)")
 
         hotKeyControl.hotKey = shortcut.hotKey
         hotKeyControl.isRecording = isRecording
@@ -419,7 +415,7 @@ private final class ShortcutRowView: NSTableCellView {
         if let failure {
             detailLabel.stringValue = "⚠︎ " + failure.hotKeyFailureDescription
             detailLabel.textColor = .systemRed
-            hotKeyControl.toolTip = "点击重新录制"
+            hotKeyControl.toolTip = L("Click to record again", "点击重新录制")
         } else {
             if let warning = shortcut.hotKey?.typingWarning {
                 detailLabel.stringValue = "⚠︎ " + warning
@@ -428,11 +424,11 @@ private final class ShortcutRowView: NSTableCellView {
                 detailLabel.stringValue = shortcut.bundleIdentifier ?? shortcut.appPath
                 detailLabel.textColor = .secondaryLabelColor
             }
-            hotKeyControl.toolTip = shortcut.hotKey == nil ? "点击录制快捷键" : "点击修改快捷键"
+            hotKeyControl.toolTip = shortcut.hotKey == nil ? L("Click to record a shortcut", "点击录制快捷键") : L("Click to change the shortcut", "点击修改快捷键")
         }
         if !FileManager.default.fileExists(atPath: shortcut.appPath),
            shortcut.bundleIdentifier.flatMap({ NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) }) == nil {
-            detailLabel.stringValue = "⚠︎ 找不到此 App，可能已被移动或卸载"
+            detailLabel.stringValue = L("⚠︎ App not found — it may have been moved or uninstalled", "⚠︎ 找不到此 App，可能已被移动或卸载")
             detailLabel.textColor = .systemOrange
             iconView.alphaValue = 0.5
         } else {
@@ -442,11 +438,11 @@ private final class ShortcutRowView: NSTableCellView {
 
     private func makeContextMenu() -> NSMenu {
         let menu = NSMenu()
-        menu.addItem(withTitle: "录制快捷键", action: #selector(record), keyEquivalent: "").target = self
-        menu.addItem(withTitle: "预览启动提示", action: #selector(preview), keyEquivalent: "").target = self
-        menu.addItem(withTitle: "在访达中显示", action: #selector(reveal), keyEquivalent: "").target = self
+        menu.addItem(withTitle: L("Record Shortcut", "录制快捷键"), action: #selector(record), keyEquivalent: "").target = self
+        menu.addItem(withTitle: L("Preview Launch Hint", "预览启动提示"), action: #selector(preview), keyEquivalent: "").target = self
+        menu.addItem(withTitle: L("Show in Finder", "在访达中显示"), action: #selector(reveal), keyEquivalent: "").target = self
         menu.addItem(.separator())
-        menu.addItem(withTitle: "删除", action: #selector(delete), keyEquivalent: "").target = self
+        menu.addItem(withTitle: L("Remove", "删除"), action: #selector(delete), keyEquivalent: "").target = self
         return menu
     }
 
@@ -501,15 +497,15 @@ private final class EmptyStateView: NSView {
             .withSymbolConfiguration(config)
         symbol.contentTintColor = .tertiaryLabelColor
 
-        let title = NSTextField(labelWithString: "还没有添加 App")
+        let title = NSTextField(labelWithString: L("No apps yet", "还没有添加 App"))
         title.font = .systemFont(ofSize: 15, weight: .semibold)
-        let detail = NSTextField(labelWithString: "把 App 从访达或“应用程序”拖到这里，\n或点击下方按钮选择。")
+        let detail = NSTextField(labelWithString: L("Drag apps here from Finder or Applications,\nor choose them with the button below.", "把 App 从访达或“应用程序”拖到这里，\n或点击下方按钮选择。"))
         detail.font = .systemFont(ofSize: 12)
         detail.textColor = .secondaryLabelColor
         detail.alignment = .center
         detail.maximumNumberOfLines = 2
 
-        let button = NSButton(title: "选择 App…", target: self, action: #selector(add))
+        let button = NSButton(title: L("Choose Apps…", "选择 App…"), target: self, action: #selector(add))
         button.applyGlassStyle()
         button.controlSize = .large
         button.keyEquivalent = "\r"

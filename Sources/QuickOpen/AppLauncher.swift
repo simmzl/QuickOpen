@@ -108,8 +108,8 @@ final class AppLauncher {
 
     private func showMissingApplicationAlert(_ shortcut: AppShortcut) {
         let alert = NSAlert()
-        alert.messageText = "找不到 \(shortcut.appName)"
-        alert.informativeText = "这个 App 可能已被移动或卸载。请在 QuickOpen 中删除后重新添加。"
+        alert.messageText = L("Can’t find \(shortcut.appName)", "找不到 \(shortcut.appName)")
+        alert.informativeText = L("The app may have been moved or uninstalled. Remove it in QuickOpen and add it again.", "这个 App 可能已被移动或卸载。请在 QuickOpen 中删除后重新添加。")
         alert.alertStyle = .warning
         Self.activateSelf()
         alert.runModal()
@@ -117,7 +117,7 @@ final class AppLauncher {
 
     private func showLaunchError(_ error: Error, appName: String) {
         let alert = NSAlert()
-        alert.messageText = "无法打开 \(appName)"
+        alert.messageText = L("Couldn’t open \(appName)", "无法打开 \(appName)")
         alert.informativeText = error.localizedDescription
         alert.alertStyle = .warning
         Self.activateSelf()

@@ -49,7 +49,7 @@ struct HotKey: Codable, Equatable, Hashable {
     /// 单键提示文字，例如“单键 A 会在所有 App 中被拦截，无法正常输入该键”。
     var typingWarning: String? {
         guard interferesWithTyping else { return nil }
-        return "\(displayString) 会在所有 App 中被拦截，无法再正常输入该键"
+        return L("\(displayString) will be captured in every app, so you won’t be able to type it", "\(displayString) 会在所有 App 中被拦截，无法再正常输入该键")
     }
 
     static func carbonModifiers(from flags: NSEvent.ModifierFlags) -> UInt32 {

@@ -10,8 +10,8 @@ enum OverviewMode: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .hold: return "按住显示（松开修饰键关闭）"
-        case .toggle: return "切换显示（再按一次或 Esc 关闭）"
+        case .hold: return L("Hold to show (closes when modifiers are released)", "按住显示（松开修饰键关闭）")
+        case .toggle: return L("Toggle (press again or Esc to close)", "切换显示（再按一次或 Esc 关闭）")
         }
     }
 }
@@ -23,8 +23,8 @@ enum HUDPosition: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .center: return "屏幕中央"
-        case .bottom: return "屏幕底部"
+        case .center: return L("Center of screen", "屏幕中央")
+        case .bottom: return L("Bottom of screen", "屏幕底部")
         }
     }
 }

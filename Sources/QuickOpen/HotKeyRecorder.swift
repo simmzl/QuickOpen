@@ -107,8 +107,8 @@ extension HotKeyConflict {
     var message: String? {
         switch self {
         case .none: return nil
-        case .application(let name): return "这个快捷键已经分配给 \(name)"
-        case .overview: return "这个快捷键已用于速查面板"
+        case .application(let name): return L("This shortcut is already used by \(name)", "这个快捷键已经分配给 \(name)")
+        case .overview: return L("This shortcut is used by the overview", "这个快捷键已用于速查面板")
         }
     }
 }
@@ -117,7 +117,7 @@ extension OSStatus {
     /// 热键注册失败时给用户看的说明。
     var hotKeyFailureDescription: String {
         self == eventHotKeyExistsErr
-            ? "该快捷键已被系统或其他应用占用，请换一个。"
-            : "系统无法注册该快捷键（错误码 \(self)）。"
+            ? L("This shortcut is taken by the system or another app. Please choose another.", "该快捷键已被系统或其他应用占用，请换一个。")
+            : L("The system couldn’t register this shortcut (error \(self)).", "系统无法注册该快捷键（错误码 \(self)）。")
     }
 }

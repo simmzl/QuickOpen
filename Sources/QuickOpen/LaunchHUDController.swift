@@ -28,20 +28,18 @@ final class LaunchHUDController {
         let token = generation
         hideWorkItem?.cancel()
 
-        let icon = NSWorkspace.shared.icon(forFile: shortcut.appPath)
-        icon.size = NSSize(width: 256, height: 256)
-        iconView.image = icon
+        iconView.image = AppIcons.icon(forPath: shortcut.appPath, size: 112)
         nameLabel.stringValue = shortcut.appName
         keyCaps.hotKey = shortcut.hotKey
         switch outcome {
         case .activated:
             statusLabel.stringValue = ""
         case .launched:
-            statusLabel.stringValue = "正在启动…"
+            statusLabel.stringValue = L("Launching…", "正在启动…")
         case .hidden:
-            statusLabel.stringValue = "已隐藏"
+            statusLabel.stringValue = L("Hidden", "已隐藏")
         case .missing:
-            statusLabel.stringValue = "找不到 App"
+            statusLabel.stringValue = L("App not found", "找不到 App")
         }
         statusLabel.isHidden = statusLabel.stringValue.isEmpty
         iconView.alphaValue = outcome == .hidden ? 0.55 : 1

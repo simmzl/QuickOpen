@@ -34,11 +34,12 @@
   - 也可以直接按某个 App 的快捷键，或者点击它的图标。
 - **启动提示。** 每次按快捷键时，屏幕上会短暂显示这个 App 的图标和快捷键，帮你记住它们。位置和停留时间可调。
 - **液态玻璃界面。** 在 macOS 26 上使用系统液态玻璃，macOS 13–15 自动降级为磨砂效果；跟随浅色、深色模式。
+- **中英双语。** 默认跟随系统语言，也可在「设置 › 通用」中切换。
 - **细节完善：** 快捷键冲突检测、被其他 App 占用时提示、拖动排序、从访达直接拖入 App、登录时启动。
 - **私密轻量：** 不需要辅助功能权限，不联网，没有第三方依赖。纯 AppKit + Carbon，约 1 MB。
 
 <p align="center">
-  <img src="docs/images/overview-dark.png" width="720" alt="速查面板">
+  <img src="docs/images/overview-zh.png" width="720" alt="速查面板">
 </p>
 
 <details>
@@ -46,9 +47,9 @@
 
 | 快捷键 | 通用 |
 |---|---|
-| <img src="docs/images/settings-shortcuts-light.png" width="420" alt="快捷键设置"> | <img src="docs/images/settings-general-light.png" width="420" alt="通用设置"> |
+| <img src="docs/images/settings-shortcuts-zh.png" width="420" alt="快捷键设置"> | <img src="docs/images/settings-general-zh.png" width="420" alt="通用设置"> |
 
-<p align="center"><img src="docs/images/hud-dark.png" width="240" alt="启动提示"></p>
+<p align="center"><img src="docs/images/hud-zh.png" width="240" alt="启动提示"></p>
 
 </details>
 
@@ -74,7 +75,7 @@
 小提示：
 
 - 可以用单个字母或数字作快捷键，但这个键会在所有 App 中被拦截，无法再正常输入。单键推荐用 `F1`–`F20`。
-- 「设置 › 通用」中可以修改速查面板的快捷键和呼出方式、启动提示、再按一次隐藏、登录时启动。
+- 「设置 › 通用」中可以切换界面语言，修改速查面板的快捷键和呼出方式、启动提示、再按一次隐藏、登录时启动。
 - 快捷键保存在 `~/Library/Application Support/QuickOpen/shortcuts.json`。如果文件损坏无法读取，会备份为 `shortcuts.corrupted-<时间>.json`，不会被覆盖。
 
 ## 从源码构建
@@ -103,6 +104,12 @@ swift test                 # 运行测试
 
 ```bash
 QUICKOPEN_SNAPSHOT_DIR=/tmp/quickopen-shots swift test --filter SnapshotTests
+```
+
+README 中的中英文截图由以下命令生成：
+
+```bash
+QUICKOPEN_README_IMAGES=1 QUICKOPEN_SNAPSHOT_DIR=/tmp/qo swift test --filter testRenderReadmeImages
 ```
 
 ## 发布

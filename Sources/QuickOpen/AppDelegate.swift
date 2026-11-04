@@ -130,7 +130,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let menu = NSMenu()
         menu.delegate = self
 
-        let overviewItem = NSMenuItem(title: "显示速查面板", action: #selector(showOverviewFromMenu), keyEquivalent: "")
+        let overviewItem = NSMenuItem(title: L("Show Overview", "显示速查面板"), action: #selector(showOverviewFromMenu), keyEquivalent: "")
         overviewItem.target = self
         overviewItem.image = NSImage(systemSymbolName: "square.grid.2x2", accessibilityDescription: nil)
         if registrationFailures[SettingsContext.overviewHotKeyID] == nil {
@@ -138,7 +138,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         menu.addItem(overviewItem)
 
-        let settingsItem = NSMenuItem(title: "设置…", action: #selector(showSettings), keyEquivalent: ",")
+        let settingsItem = NSMenuItem(title: L("Settings…", "设置…"), action: #selector(showSettings), keyEquivalent: ",")
         settingsItem.keyEquivalentModifierMask = [.command]
         settingsItem.target = self
         settingsItem.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: nil)
@@ -146,7 +146,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         if !registrationFailures.isEmpty {
             let warning = NSMenuItem(
-                title: "\(registrationFailures.count) 个快捷键被占用，点此处理",
+                title: L("\(registrationFailures.count) shortcut(s) unavailable — click to fix", "\(registrationFailures.count) 个快捷键被占用，点此处理"),
                 action: #selector(showSettings),
                 keyEquivalent: ""
             )
@@ -173,7 +173,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 icon.size = NSSize(width: 16, height: 16)
                 item.image = icon
                 if registrationFailures[shortcut.id] != nil {
-                    item.title = "\(shortcut.appName)（快捷键被占用）"
+                    item.title = L("\(shortcut.appName) (shortcut unavailable)", "\(shortcut.appName)（快捷键被占用）")
                 } else {
                     // 使用系统菜单的右对齐快捷键样式展示。
                     Self.applyKeyEquivalent(shortcut.hotKey, to: item)
@@ -183,7 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         menu.addItem(.separator())
-        let quitItem = NSMenuItem(title: "退出 QuickOpen", action: #selector(quit), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: L("Quit QuickOpen", "退出 QuickOpen"), action: #selector(quit), keyEquivalent: "q")
         quitItem.keyEquivalentModifierMask = [.command]
         quitItem.target = self
         menu.addItem(quitItem)
@@ -250,10 +250,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func showCorruptedConfigurationAlert(_ backupURL: URL) {
         let alert = NSAlert()
-        alert.messageText = "快捷键配置文件无法读取"
-        alert.informativeText = "原文件已备份为 \(backupURL.lastPathComponent)，QuickOpen 将以空配置启动。"
-        alert.addButton(withTitle: "好")
-        alert.addButton(withTitle: "在访达中显示")
+        alert.messageText = L("Couldn’t read the shortcuts file", "快捷键配置文件无法读取")
+        alert.informativeText = L("The original file was backed up as \(backupURL.lastPathComponent). QuickOpen will start with an empty list.", "原文件已备份为 \(backupURL.lastPathComponent)，QuickOpen 将以空配置启动。")
+        alert.addButton(withTitle: L("OK", "好"))
+        alert.addButton(withTitle: L("Show in Finder", "在访达中显示"))
         alert.alertStyle = .warning
         AppLauncher.activateSelf()
         if alert.runModal() == .alertSecondButtonReturn {

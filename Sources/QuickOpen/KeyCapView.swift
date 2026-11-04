@@ -14,7 +14,7 @@ final class KeyCapView: NSView {
 
     var hotKey: HotKey? { didSet { rebuild() } }
     /// 未设置快捷键时显示的占位文字。
-    var placeholder: String = "未设置" { didSet { rebuild() } }
+    var placeholder: String = L("Not set", "未设置") { didSet { rebuild() } }
     var style: Style = .regular { didSet { rebuild() } }
     var fontSize: CGFloat = 12 { didSet { rebuild() } }
 
