@@ -1,4 +1,4 @@
-// 生成 QuickOpen 正式图标（.iconset）：「卡片跃出」· 琥珀橙底 + 白色液态玻璃卡片。
+// 生成 QuickOpen 正式图标（.iconset）：「卡片跃出」· 琥珀橙底 + 两张白色液态玻璃卡片。
 // 用法：xcrun swift scripts/generate-icon.swift <iconset-directory>
 import AppKit
 import CoreImage
@@ -212,12 +212,12 @@ func frostedGlass(_ hex: UInt32, _ alpha: CGFloat, shadow: CGColor = rgb(0x1B234
 
 func drawIcon(_ ctx: CGContext, _ s: CGFloat) {
     drawBody(ctx, s, Background(colors: [rgb(0xFFC24D), rgb(0xF97316)], rim: 0.75))
-    drawCards(ctx, s, Cards(
-        back: Glass(tint: [rgb(0xFFFFFF, 0.30), rgb(0xFFFFFF, 0.18)], shadow: rgb(0x9A3A07, 0.18)),
-        middle: Glass(tint: [rgb(0xFFFFFF, 0.45), rgb(0xFFFFFF, 0.30)], shadow: rgb(0x9A3A07, 0.20)),
-        front: Glass(tint: [rgb(0xFFFFFF, 0.95), rgb(0xFFFFFF, 0.88)],
-                     shadow: rgb(0x9A3A07, 0.32), shadowBlur: 0.06, rim: 1.0, sheen: 0.5)
-    ))
+    // 两张卡片：后卡只露出左下一角，前卡更大、更居中。
+    glassCard(ctx, s, tilePath(CGPoint(x: 0.43, y: 0.44), 0.40, -10, s),
+              Glass(tint: [rgb(0xFFFFFF, 0.40), rgb(0xFFFFFF, 0.24)], shadow: rgb(0x9A3A07, 0.22)))
+    glassCard(ctx, s, tilePath(CGPoint(x: 0.555, y: 0.545), 0.44, 6, s),
+              Glass(tint: [rgb(0xFFFFFF, 0.95), rgb(0xFFFFFF, 0.88)],
+                    shadow: rgb(0x9A3A07, 0.32), shadowBlur: 0.06, rim: 1.0, sheen: 0.5))
 }
 
 let variants: [(name: String, pixels: Int)] = [

@@ -24,9 +24,11 @@ enum StatusBarIcon {
 
     private static func draw(in size: NSSize) {
         let s = size.width
-        // 后卡：只描边；前卡：实心。前卡周围挖空一圈，保证 18pt 下两张卡片分得开。
-        let back = card(center: CGPoint(x: s * 0.40, y: s * 0.41), side: s * 0.52, degrees: -12)
-        let front = card(center: CGPoint(x: s * 0.60, y: s * 0.59), side: s * 0.56, degrees: 9)
+        // 与 App 图标一致：后卡只露出左下一角，前卡更大、更居中。
+        // 后卡只描边，前卡实心；前卡周围挖空一圈，保证 18pt 下两张卡片分得开。
+        // 菜单栏尺寸很小，后卡比 App 图标里露得多一些，保证一眼看出是两张卡片。
+        let back = card(center: CGPoint(x: s * 0.37, y: s * 0.39), side: s * 0.52, degrees: -10)
+        let front = card(center: CGPoint(x: s * 0.60, y: s * 0.59), side: s * 0.56, degrees: 6)
 
         NSColor.black.setStroke()
         back.lineWidth = 1.4
