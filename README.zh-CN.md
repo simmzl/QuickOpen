@@ -23,7 +23,7 @@
 ---
 
 <p align="center">
-  <img src="docs/media/demo-zh.gif" width="800" alt="QuickOpen 演示：F1–F4 切换 Claude、ChatGPT、Chrome、Figma">
+  <img src="docs/media/demo-zh.gif" width="800" alt="QuickOpen 演示：示例中 F1–F4 分别切换 Claude、ChatGPT、Chrome、Figma">
   <br>
   <sub><a href="docs/media/demo-zh.mp4">观看高清版（MP4）</a></sub>
 </p>

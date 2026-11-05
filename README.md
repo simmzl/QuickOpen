@@ -23,7 +23,7 @@
 ---
 
 <p align="center">
-  <img src="docs/media/demo-en.gif" width="800" alt="QuickOpen demo: F1–F4 switch to Claude, ChatGPT, Chrome and Figma">
+  <img src="docs/media/demo-en.gif" width="800" alt="QuickOpen demo: in this example, F1–F4 switch to Claude, ChatGPT, Chrome and Figma">
   <br>
   <sub><a href="docs/media/demo-en.mp4">Watch in HD (MP4)</a></sub>
 </p>
