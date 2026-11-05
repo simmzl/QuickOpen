@@ -5,8 +5,8 @@
 <h1 align="center">QuickOpen</h1>
 
 <p align="center">
-  Launch or switch to any Mac app with a single global shortcut.<br>
-  A tiny, native menu bar utility — no Accessibility permission required.
+  One key, one app. Jump to any Mac app with a global shortcut,<br>
+  and hold <code>⌃⌥Space</code> to see all your shortcuts at a glance.
 </p>
 
 <p align="center">

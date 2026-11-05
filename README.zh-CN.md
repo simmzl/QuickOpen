@@ -5,8 +5,8 @@
 <h1 align="center">QuickOpen</h1>
 
 <p align="center">
-  一个全局快捷键，直接打开或切换到任意 Mac App。<br>
-  原生、轻量的菜单栏小工具，无需“辅助功能”权限。
+  一个键，打开一个 App。用全局快捷键直达任意 Mac App，<br>
+  按住 <code>⌃⌥Space</code> 一眼看清所有快捷键。
 </p>
 
 <p align="center">
