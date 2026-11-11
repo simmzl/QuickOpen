@@ -5,6 +5,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-11
+
+### Added
+- **Keyboard view** for the Shortcuts tab: a sculpted Mac keyboard with each app's icon sitting right on the key that opens it.
+  - Hover an app to lift its key and press down its modifiers; everything else dims. The hint reads in the order you press it: shortcut → Open → app.
+  - A Dock below groups apps by modifier combination (single key, `⌥`, `⇧⌘`…). Hover a group to see only those keys, plus the keys macOS already uses and the ones still free; click to pin it, `Esc` to return.
+  - Hold `⌃` `⌥` `⇧` `⌘` on the real keyboard to switch groups live. Click a free key to bind an app (or add a new one); drop apps onto the keyboard to add them.
+  - Switch between the classic list (default) and the keyboard in the top-right corner; your choice is remembered.
+- Appearance setting in Settings → General: follow the system, or always Light / Dark.
+- About tab with version, author and links to the GitHub repository, releases and issues.
+
+### Changed
+- The Settings window is larger by default, resizable, and remembers its size and position. The window title is always "QuickOpen".
+- README: a new keyboard hero image that follows GitHub's light/dark theme, and refreshed screenshots.
+
+### Fixed
+- Settings → General: content can scroll when the window is short, and the note under "Launch QuickOpen at login" is no longer clipped.
+- `scripts/build-app.sh`: universal builds work with newer SwiftPM, which reuses one output directory for every architecture.
+
 ## [1.3.2] - 2026-11-04
 
 ### Changed
@@ -66,7 +85,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - Initial release.
 
-[Unreleased]: https://github.com/simmzl/QuickOpen/compare/v1.3.2...HEAD
+[Unreleased]: https://github.com/simmzl/QuickOpen/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/simmzl/QuickOpen/compare/v1.3.2...v1.4.0
 [1.3.2]: https://github.com/simmzl/QuickOpen/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/simmzl/QuickOpen/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/simmzl/QuickOpen/releases/tag/v1.3.0
