@@ -25,6 +25,7 @@ final class GeneralViewController: NSViewController {
     private let previewButton = NSButton(title: L("Preview", "预览"), target: nil, action: nil)
     private let languagePopup = NSPopUpButton()
     private let languageNote = NSTextField(labelWithString: "")
+    private let appearanceControl = NSSegmentedControl()
 
     init(context: SettingsContext) {
         self.context = context
@@ -56,6 +57,7 @@ final class GeneralViewController: NSViewController {
             loginNote.textColor = .secondaryLabelColor
         }
         hideCheckbox.state = preferences.hidesWhenFrontmost ? .on : .off
+        appearanceControl.selectedSegment = AppearanceMode.allCases.firstIndex(of: preferences.appearanceMode) ?? 0
 
         overviewControl.hotKey = preferences.overviewHotKey
         overviewControl.placeholder = L("Off · Click to record", "已关闭 · 点击录制")
@@ -141,7 +143,8 @@ final class GeneralViewController: NSViewController {
             $0.textColor = .secondaryLabelColor
             $0.lineBreakMode = .byWordWrapping
             $0.maximumNumberOfLines = 2
-            $0.preferredMaxLayoutWidth = 470
+            $0.preferredMaxLayoutWidth = 460
+            $0.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         }
 
         languagePopup.addItems(withTitles: AppLanguage.allCases.map(\.title))
@@ -152,11 +155,22 @@ final class GeneralViewController: NSViewController {
         languageNote.textColor = .secondaryLabelColor
         languageNote.isHidden = true
 
+        appearanceControl.segmentStyle = .rounded
+        appearanceControl.trackingMode = .selectOne
+        appearanceControl.segmentCount = AppearanceMode.allCases.count
+        for (index, mode) in AppearanceMode.allCases.enumerated() {
+            let symbol = mode == .system ? "circle.lefthalf.filled" : mode == .light ? "sun.max" : "moon"
+            appearanceControl.setImage(NSImage(systemSymbolName: symbol, accessibilityDescription: mode.title), forSegment: index)
+            appearanceControl.setLabel(mode.title, forSegment: index)
+        }
+        appearanceControl.target = self
+        appearanceControl.action = #selector(changeAppearance)
+
         let general = section(L("General", "通用"), rows: [
             labeled(L("Language", "语言"), stack([languagePopup, languageNote], spacing: 10)),
-            stack([loginCheckbox]),
-            indent(loginNote),
-            stack([hideCheckbox])
+            labeled(L("Appearance", "外观"), appearanceControl),
+            checkbox(loginCheckbox, note: loginNote),
+            checkbox(hideCheckbox, note: nil)
         ])
 
         let overview = section(L("Overview", "速查面板"), rows: [
@@ -167,7 +181,7 @@ final class GeneralViewController: NSViewController {
         ])
 
         let hud = section(L("Launch Hint", "启动提示"), rows: [
-            stack([hudCheckbox]),
+            checkbox(hudCheckbox, note: nil),
             labeled(L("Position", "位置"), positionPopup),
             labeled(L("Duration", "停留时间"), stack([durationSlider, durationLabel, previewButton], spacing: 10))
         ])
@@ -175,13 +189,37 @@ final class GeneralViewController: NSViewController {
         let content = NSStackView(views: [general, overview, hud])
         content.orientation = .vertical
         content.alignment = .leading
-        content.spacing = 18
+        content.spacing = 22
         content.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(content)
+
+        // 内容超出窗口高度时可以滚动。
+        let document = FlippedView()
+        document.translatesAutoresizingMaskIntoConstraints = false
+        document.addSubview(content)
+        let scrollView = NSScrollView()
+        scrollView.drawsBackground = false
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.borderType = .noBorder
+        scrollView.automaticallyAdjustsContentInsets = false
+        scrollView.contentView.drawsBackground = false
+        scrollView.documentView = document
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(scrollView)
         NSLayoutConstraint.activate([
-            content.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 18),
-            content.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
-            content.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24)
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            document.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
+            document.trailingAnchor.constraint(equalTo: scrollView.contentView.trailingAnchor),
+            document.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor),
+            // 文档宽度跟随窗口，卡片右侧不会被裁掉。
+            document.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
+            content.topAnchor.constraint(equalTo: document.topAnchor, constant: 18),
+            content.leadingAnchor.constraint(equalTo: document.leadingAnchor, constant: 24),
+            content.trailingAnchor.constraint(equalTo: document.trailingAnchor, constant: -24),
+            content.bottomAnchor.constraint(equalTo: document.bottomAnchor, constant: -20)
         ])
         [general, overview, hud].forEach {
             $0.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
@@ -196,17 +234,18 @@ final class GeneralViewController: NSViewController {
         return stack
     }
 
-    private func indent(_ view: NSView) -> NSView {
-        let container = NSView()
-        view.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(view)
-        NSLayoutConstraint.activate([
-            view.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
-            view.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor),
-            view.topAnchor.constraint(equalTo: container.topAnchor, constant: -4),
-            view.bottomAnchor.constraint(equalTo: container.bottomAnchor)
-        ])
-        return container
+    /// 复选框 + 下方说明文字：说明与复选框标题左对齐，不与上一行重叠。
+    private func checkbox(_ box: NSButton, note: NSTextField?) -> NSView {
+        guard let note else { return box }
+        let column = NSStackView(views: [box, note])
+        column.orientation = .vertical
+        column.alignment = .leading
+        column.spacing = 2
+        note.translatesAutoresizingMaskIntoConstraints = false
+        let titleOffset: CGFloat = 20
+        column.setCustomSpacing(2, after: box)
+        note.leadingAnchor.constraint(equalTo: column.leadingAnchor, constant: titleOffset).isActive = true
+        return column
     }
 
     private func labeled(_ title: String, _ control: NSView) -> NSView {
@@ -232,7 +271,7 @@ final class GeneralViewController: NSViewController {
         let inner = NSStackView(views: rows)
         inner.orientation = .vertical
         inner.alignment = .leading
-        inner.spacing = 10
+        inner.spacing = 12
         inner.translatesAutoresizingMaskIntoConstraints = false
         box.contentView.addSubview(inner)
         NSLayoutConstraint.activate([
@@ -284,6 +323,12 @@ final class GeneralViewController: NSViewController {
         alert.beginSheetModal(for: window) { response in
             if response == .alertFirstButtonReturn { AppRelauncher.relaunch() }
         }
+    }
+
+    @objc private func changeAppearance() {
+        let index = appearanceControl.selectedSegment
+        guard AppearanceMode.allCases.indices.contains(index) else { return }
+        context.preferences.appearanceMode = AppearanceMode.allCases[index]
     }
 
     @objc private func toggleHide() {
@@ -373,4 +418,9 @@ final class GeneralViewController: NSViewController {
             )
         context.previewHUD(sample)
     }
+}
+
+/// 坐标原点在左上角，滚动视图内容从顶部开始排列。
+private final class FlippedView: NSView {
+    override var isFlipped: Bool { true }
 }

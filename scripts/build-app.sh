@@ -37,7 +37,11 @@ for architecture in "${architectures[@]}"; do
         --arch "$architecture" \
         ${swiftpm_flags[@]+"${swiftpm_flags[@]}"} \
         --show-bin-path)"
-    binary_paths+=("$binary_dir/QuickOpen")
+    # Newer SwiftPM may use the same output directory for every --arch;
+    # copy each slice out before the next build overwrites it.
+    slice="$project_dir/.build/quickopen-$architecture"
+    cp "$binary_dir/QuickOpen" "$slice"
+    binary_paths+=("$slice")
 done
 
 /bin/rm -rf "$app_dir"

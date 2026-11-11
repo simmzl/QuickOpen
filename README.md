@@ -6,7 +6,7 @@
 
 <p align="center">
   One key, one app. Jump to any Mac app with a global shortcut,<br>
-  and hold <code>⌃⌥Space</code> to see all your shortcuts at a glance.
+  and see every shortcut right on your keyboard.
 </p>
 
 <p align="center">
@@ -20,12 +20,24 @@
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-blue"></a>
 </p>
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/keyboard-en-dark.png">
+    <img src="docs/images/keyboard-en.png" width="900" alt="Keyboard view: Claude, ChatGPT, DeepSeek Harness, Figma and Chrome sit on the F1–F5 keycaps, Notion on ⇧⌘N and Muse on ⇧⌘M">
+  </picture>
+</p>
+
+<p align="center">
+  <b>Your apps, on your keys.</b> Each app sits right on the keycap that opens it —<br>
+  single keys like <code>F1</code>–<code>F5</code>, and combinations like <code>⇧⌘N</code> tagged with their modifiers.
+</p>
+
 ---
 
 <p align="center">
   <img src="docs/media/demo-en.gif" width="800" alt="QuickOpen demo: in this example, F1–F4 switch to Claude, ChatGPT, Chrome and Figma">
   <br>
-  <sub><a href="docs/media/demo-en.mp4">Watch in HD (MP4)</a></sub>
+  <sub>See it in action · <a href="docs/media/demo-en.mp4">Watch in HD (MP4)</a></sub>
 </p>
 
 ## Features
@@ -34,12 +46,17 @@
   - Running? It comes to the front (and opens a window if it has none).
   - Not running? It launches.
   - Already in front? Press again to hide it (optional).
+- **Keyboard view.** See your shortcuts on a sculpted Mac keyboard, with each app's icon sitting right on the key that opens it.
+  - Hover an app to lift its key, press down its modifiers and dim everything else.
+  - Apps are grouped by modifier combination (single key, `⌥`, `⌃⌥`, `⌥⌘`…) in a Dock below the keyboard; hover a group to see only those keys, plus the ones macOS already uses and the ones still free.
+  - Hold `⌃` `⌥` `⇧` `⌘` on your real keyboard to switch groups live. Click a free key to bind an app to it.
+  - Switch between the classic list and the keyboard in the top-right corner of the Shortcuts tab; your choice is remembered.
 - **Shortcut overview.** Press `⌃⌥Space` to see every app and its shortcut in a grid at the center of the screen, just like `⌘Tab`.
   - *Hold mode* (default): hold `⌃⌥`, tap `Space` to move the selection, release to open (or close if nothing is selected).
   - *Toggle mode*: press once to show, again or `Esc` to hide; arrow keys select, `↩` opens.
   - Or simply press any app's shortcut, or click its icon.
 - **Launch hint.** Each time you use a shortcut, the app's icon and keys flash briefly on screen, so shortcuts stick in your memory. Position and duration are adjustable.
-- **Liquid Glass UI** on macOS 26, with a graceful fallback on macOS 13–15. Follows light/dark mode.
+- **Liquid Glass UI** on macOS 26, with a graceful fallback on macOS 13–15. Follows the system, or pick Light / Dark in Settings → General.
 - **English and Simplified Chinese.** Follows your system language by default; switch in Settings → General.
 - **Thoughtful details:** conflict detection, warnings for shortcuts taken by other apps, drag to reorder, drag apps in from Finder, launch at login.
 - **Private and light:** no Accessibility permission, no network access, no third-party dependencies. Pure AppKit + Carbon, about 1 MB.
@@ -53,9 +70,13 @@
 <details>
 <summary>More screenshots</summary>
 
-| Shortcuts | General |
+| Shortcuts · Keyboard (dark) | Shortcuts · List |
 |---|---|
-| <img src="docs/images/settings-shortcuts-en.png" width="420" alt="Shortcut settings"> | <img src="docs/images/settings-general-en.png" width="420" alt="General settings"> |
+| <img src="docs/images/settings-keyboard-en.png" width="420" alt="Keyboard view in dark mode"> | <img src="docs/images/settings-shortcuts-en.png" width="420" alt="Shortcut list"> |
+
+| General | About |
+|---|---|
+| <img src="docs/images/settings-general-en.png" width="420" alt="General settings"> | <img src="docs/images/settings-about-en.png" width="420" alt="About"> |
 
 <p align="center"><img src="docs/images/hud-en.png" width="240" alt="Launch hint"></p>
 
@@ -117,7 +138,7 @@ QUICKOPEN_SNAPSHOT_DIR=/tmp/quickopen-shots swift test --filter SnapshotTests
 README screenshots (English and Chinese) are generated with:
 
 ```bash
-QUICKOPEN_README_IMAGES=1 QUICKOPEN_SNAPSHOT_DIR=/tmp/qo swift test --filter testRenderReadmeImages
+QUICKOPEN_README_IMAGES=1 QUICKOPEN_SNAPSHOT_DIR=/tmp/qo swift test --filter 'testRenderReadmeImages|testRenderReadmeKeyboard'
 ```
 
 The demo video is rendered from the app's real UI components (no screen recording):

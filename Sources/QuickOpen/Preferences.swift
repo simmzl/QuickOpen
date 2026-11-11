@@ -29,6 +29,45 @@ enum HUDPosition: String, CaseIterable {
     }
 }
 
+/// 「快捷键」页的显示方式。
+enum ShortcutsViewStyle: String, CaseIterable {
+    /// 原来的列表（默认）。
+    case list
+    /// 键盘视图：App 图标画在对应的键帽上。
+    case keyboard
+
+    var title: String {
+        switch self {
+        case .list: return L("List", "列表")
+        case .keyboard: return L("Keyboard", "键盘")
+        }
+    }
+}
+
+/// 外观：跟随系统 / 浅色 / 深色。
+enum AppearanceMode: String, CaseIterable {
+    case system
+    case light
+    case dark
+
+    var title: String {
+        switch self {
+        case .system: return L("Follow System", "跟随系统")
+        case .light: return L("Light", "浅色")
+        case .dark: return L("Dark", "深色")
+        }
+    }
+
+    /// nil 表示跟随系统。
+    var appearance: NSAppearance? {
+        switch self {
+        case .system: return nil
+        case .light: return NSAppearance(named: .aqua)
+        case .dark: return NSAppearance(named: .darkAqua)
+        }
+    }
+}
+
 extension Notification.Name {
     static let quickOpenPreferencesChanged = Notification.Name("QuickOpenPreferencesChanged")
 }
@@ -42,6 +81,8 @@ final class Preferences {
         static let showsLaunchHUD = "showsLaunchHUD"
         static let hudPosition = "hudPosition"
         static let hudDuration = "hudDuration"
+        static let shortcutsViewStyle = "shortcutsViewStyle"
+        static let appearanceMode = "appearanceMode"
     }
 
     static let hudDurationRange: ClosedRange<Double> = 0.3...2.0
@@ -98,6 +139,18 @@ final class Preferences {
     var hudDuration: Double {
         get { Self.clampDuration(defaults.double(forKey: Key.hudDuration)) }
         set { defaults.set(Self.clampDuration(newValue), forKey: Key.hudDuration); changed() }
+    }
+
+    /// 「快捷键」页上次使用的显示方式；默认列表。只影响界面，不发通知。
+    var shortcutsViewStyle: ShortcutsViewStyle {
+        get { ShortcutsViewStyle(rawValue: defaults.string(forKey: Key.shortcutsViewStyle) ?? "") ?? .list }
+        set { defaults.set(newValue.rawValue, forKey: Key.shortcutsViewStyle) }
+    }
+
+    /// 界面外观；设置后立即应用到整个 App（设置窗口、速查面板、启动提示）。
+    var appearanceMode: AppearanceMode {
+        get { AppearanceMode(rawValue: defaults.string(forKey: Key.appearanceMode) ?? "") ?? .system }
+        set { defaults.set(newValue.rawValue, forKey: Key.appearanceMode); changed() }
     }
 
     static func clampDuration(_ value: Double) -> Double {

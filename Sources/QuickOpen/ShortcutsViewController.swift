@@ -8,8 +8,14 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
     private let scrollView = NSScrollView()
     private let emptyView = EmptyStateView()
     private let hintLabel = NSTextField(labelWithString: "")
+    private let keyboardView = KeyboardMapView()
+    private let styleControl = NSSegmentedControl()
+    /// 在键盘视图里点空闲键后「添加 App…」：添加完成后直接绑定到这个快捷键。
+    private var pendingAssignHotKey: HotKey?
     private static let rowDragType = NSPasteboard.PasteboardType("com.simmzl.quickopen.row")
     private static var defaultHint: String { L("Single keys or combinations · Drag to reorder · Drop apps here to add", "支持单键或组合键 · 拖动可排序 · 可把 App 直接拖进来") }
+    private static var keyboardHint: String { L("Hover to preview · Click a key to assign · Hold ⌃⌥⇧⌘ to switch groups", "悬停查看 · 点击键帽绑定 · 按住 ⌃⌥⇧⌘ 切换分组 · 可把 App 拖进来") }
+    private var idleHint: String { style == .keyboard ? Self.keyboardHint : Self.defaultHint }
 
     init(context: SettingsContext) {
         self.context = context
@@ -43,13 +49,22 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
         refresh()
     }
 
+    private var style: ShortcutsViewStyle { context.preferences.shortcutsViewStyle }
+
     func refresh() {
         tableView.reloadData()
         let isEmpty = context.store.shortcuts.isEmpty
-        emptyView.isHidden = !isEmpty
-        scrollView.isHidden = isEmpty
+        let keyboard = style == .keyboard
+        emptyView.isHidden = !isEmpty || keyboard
+        scrollView.isHidden = isEmpty || keyboard
+        keyboardView.isHidden = !keyboard
+        styleControl.selectedSegment = keyboard ? 1 : 0
+        keyboardView.shortcuts = context.store.shortcuts
+        keyboardView.overviewHotKey = context.preferences.overviewHotKey
+        keyboardView.failures = context.registrationFailures
+        keyboardView.recordingTarget = context.recordingTarget
         if context.recordingTarget == nil || context.recordingTarget == SettingsContext.overviewHotKeyID {
-            setHint(Self.defaultHint, highlighted: false)
+            setHint(idleHint, highlighted: false)
         }
     }
 
@@ -66,6 +81,39 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
         let subtitleLabel = NSTextField(labelWithString: L("Press a shortcut to bring its app to the front, or launch it if it isn’t running.", "按下快捷键，目标 App 立即来到前台；未运行时自动启动。"))
         subtitleLabel.font = .systemFont(ofSize: 12)
         subtitleLabel.textColor = .secondaryLabelColor
+        styleControl.segmentStyle = .rounded
+        styleControl.trackingMode = .selectOne
+        styleControl.segmentCount = ShortcutsViewStyle.allCases.count
+        for (index, item) in ShortcutsViewStyle.allCases.enumerated() {
+            styleControl.setImage(NSImage(systemSymbolName: item == .list ? "list.bullet" : "keyboard",
+                                          accessibilityDescription: item.title), forSegment: index)
+            styleControl.setLabel(item.title, forSegment: index)
+            styleControl.setToolTip(item == .list ? L("Show as a list", "以列表显示") : L("Show on a keyboard", "在键盘上显示"), forSegment: index)
+        }
+        styleControl.target = self
+        styleControl.action = #selector(styleChanged)
+        styleControl.controlSize = .regular
+
+        keyboardView.onRecord = { [weak self] id in self?.beginRecording(id: id) }
+        keyboardView.onDelete = { [weak self] id in
+            guard let self, let row = self.context.store.shortcuts.firstIndex(where: { $0.id == id }) else { return }
+            self.confirmDelete(row: row)
+        }
+        keyboardView.onPreview = { [weak self] id in
+            guard let self, let shortcut = self.context.store.shortcut(id: id) else { return }
+            self.context.previewHUD(shortcut)
+        }
+        keyboardView.onReveal = { [weak self] id in
+            guard let shortcut = self?.context.store.shortcut(id: id) else { return }
+            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: shortcut.appPath)])
+        }
+        keyboardView.onAssign = { [weak self] id, hotKey in self?.assign(hotKey, to: id) }
+        keyboardView.onDropApplications = { [weak self] urls in self?.add(urls) }
+        keyboardView.onAddAndAssign = { [weak self] hotKey in
+            self?.pendingAssignHotKey = hotKey
+            self?.addApplication()
+        }
+
         let header = NSStackView(views: [titleLabel, subtitleLabel])
         header.orientation = .vertical
         header.alignment = .leading
@@ -116,14 +164,20 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
         footer.alignment = .centerY
         footer.spacing = 12
 
-        [header, scrollView, emptyView, footer].forEach {
+        [header, styleControl, scrollView, emptyView, keyboardView, footer].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview($0)
         }
         NSLayoutConstraint.activate([
             header.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 18),
             header.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
-            header.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -24),
+            header.trailingAnchor.constraint(lessThanOrEqualTo: styleControl.leadingAnchor, constant: -12),
+            styleControl.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            styleControl.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            keyboardView.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 8),
+            keyboardView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+            keyboardView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
+            keyboardView.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -8),
             scrollView.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 14),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 18),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -18),
@@ -136,7 +190,38 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
             footer.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -24),
             footer.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -18)
         ])
-        setHint(Self.defaultHint, highlighted: false)
+        setHint(idleHint, highlighted: false)
+    }
+
+    @objc private func styleChanged() {
+        let newStyle: ShortcutsViewStyle = styleControl.selectedSegment == 1 ? .keyboard : .list
+        guard newStyle != style else { return }
+        if context.recordingTarget != nil { context.cancelRecording() }
+        context.preferences.shortcutsViewStyle = newStyle
+        keyboardView.resetGroup()
+        refresh()
+        if newStyle == .keyboard { view.window?.makeFirstResponder(keyboardView) }
+    }
+
+    /// 键盘视图里把某个 App 直接绑定到点中的组合键。走与录制相同的冲突检查和注册流程。
+    private func assign(_ hotKey: HotKey, to id: UUID) {
+        if let message = HotKeyConflictChecker.conflict(
+            for: hotKey, shortcuts: context.store.shortcuts,
+            overviewHotKey: context.preferences.overviewHotKey, excludingShortcut: id
+        ).message {
+            SettingsContext.showAlert(message: L("\(hotKey.displayString) is unavailable", "快捷键 \(hotKey.displayString) 不可用"),
+                                      detail: message, window: view.window)
+            return
+        }
+        let previous = context.store.shortcut(id: id)?.hotKey
+        context.store.updateHotKey(hotKey, for: id)
+        let failures = context.reload()
+        if let status = failures[id] {
+            context.store.updateHotKey(previous, for: id)
+            context.reload()
+            SettingsContext.showAlert(message: L("\(hotKey.displayString) is unavailable", "快捷键 \(hotKey.displayString) 不可用"),
+                                      detail: status.hotKeyFailureDescription, window: view.window)
+        }
     }
 
     private func setHint(_ text: String, highlighted: Bool) {
@@ -249,14 +334,20 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
         panel.canChooseFiles = true
         panel.resolvesAliases = true
         panel.beginSheetModal(for: window) { [weak self] response in
-            guard response == .OK else { return }
+            guard response == .OK else { self?.pendingAssignHotKey = nil; return }
             self?.add(panel.urls)
         }
     }
 
     private func add(_ urls: [URL]) {
+        let pending = pendingAssignHotKey
+        pendingAssignHotKey = nil
         let addedIDs = context.store.addApplications(at: urls)
         context.reload()
+        if let pending, let first = addedIDs.first {
+            assign(pending, to: first)
+            return
+        }
         if addedIDs.count == 1 {
             if let row = context.store.shortcuts.firstIndex(where: { $0.id == addedIDs[0] }) {
                 tableView.scrollRowToVisible(row)

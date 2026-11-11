@@ -6,7 +6,7 @@
 
 <p align="center">
   一个键，打开一个 App。用全局快捷键直达任意 Mac App，<br>
-  按住 <code>⌃⌥Space</code> 一眼看清所有快捷键。
+  每个快捷键都直接画在你的键盘上。
 </p>
 
 <p align="center">
@@ -20,12 +20,24 @@
   <a href="LICENSE"><img alt="MIT 许可证" src="https://img.shields.io/badge/license-MIT-blue"></a>
 </p>
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/keyboard-zh-dark.png">
+    <img src="docs/images/keyboard-zh.png" width="900" alt="键盘视图：Claude、ChatGPT、DeepSeek Harness、Figma、Chrome 分别落在 F1–F5 键帽上，Notion 和 Muse 分别绑定 ⇧⌘N、⇧⌘M">
+  </picture>
+</p>
+
+<p align="center">
+  <b>App 就在你的键帽上。</b>每个 App 都落在打开它的那颗键上——<br>
+  单键如 <code>F1</code>–<code>F5</code>，组合键如 <code>⇧⌘N</code> 会标出所需的修饰键。
+</p>
+
 ---
 
 <p align="center">
   <img src="docs/media/demo-zh.gif" width="800" alt="QuickOpen 演示：示例中 F1–F4 分别切换 Claude、ChatGPT、Chrome、Figma">
   <br>
-  <sub><a href="docs/media/demo-zh.mp4">观看高清版（MP4）</a></sub>
+  <sub>实际效果 · <a href="docs/media/demo-zh.mp4">观看高清版（MP4）</a></sub>
 </p>
 
 ## 功能
@@ -34,12 +46,17 @@
   - 已在运行：立即切到前台；没有窗口时会新开一个。
   - 没有运行：自动启动。
   - 已在最前面：再按一次可以隐藏（可在设置中关闭）。
+- **键盘视图。** 在一把立体的 Mac 键盘上查看快捷键，每个 App 的图标就落在打开它的那颗键帽上。
+  - 悬停某个 App：它的触发键抬起、对应修饰键按下，其余内容变暗。
+  - 下方 Dock 按修饰键组合（单键、`⌥`、`⌃⌥`、`⌥⌘`…）分组平铺所有 App；悬停分组只看这一组，同时标出系统已占用的键和空闲键。
+  - 按住真实键盘上的 `⌃` `⌥` `⇧` `⌘` 实时切换分组；点空闲键即可绑定 App。
+  - 在「快捷键」页右上角切换列表 / 键盘，会记住你的选择。
 - **速查面板。** 按 `⌃⌥Space`，屏幕中央以网格显示所有 App 和对应的快捷键，就像 `⌘Tab`。
   - **按住显示**（默认）：按住 `⌃⌥`，连按 `Space` 切换选中项，松开即打开；没有选中时松开则关闭。
   - **切换显示**：按一次显示，再按一次或按 `Esc` 关闭；方向键选择，`↩` 打开。
   - 也可以直接按某个 App 的快捷键，或者点击它的图标。
 - **启动提示。** 每次按快捷键时，屏幕上会短暂显示这个 App 的图标和快捷键，帮你记住它们。位置和停留时间可调。
-- **液态玻璃界面。** 在 macOS 26 上使用系统液态玻璃，macOS 13–15 自动降级为磨砂效果；跟随浅色、深色模式。
+- **液态玻璃界面。** 在 macOS 26 上使用系统液态玻璃，macOS 13–15 自动降级为磨砂效果；默认跟随系统，也可在「设置 › 通用」中固定为浅色或深色。
 - **中英双语。** 默认跟随系统语言，也可在「设置 › 通用」中切换。
 - **细节完善：** 快捷键冲突检测、被其他 App 占用时提示、拖动排序、从访达直接拖入 App、登录时启动。
 - **私密轻量：** 不需要辅助功能权限，不联网，没有第三方依赖。纯 AppKit + Carbon，约 1 MB。
@@ -53,9 +70,13 @@
 <details>
 <summary>更多截图</summary>
 
-| 快捷键 | 通用 |
+| 快捷键 · 键盘（深色） | 快捷键 · 列表 |
 |---|---|
-| <img src="docs/images/settings-shortcuts-zh.png" width="420" alt="快捷键设置"> | <img src="docs/images/settings-general-zh.png" width="420" alt="通用设置"> |
+| <img src="docs/images/settings-keyboard-zh.png" width="420" alt="键盘视图（深色）"> | <img src="docs/images/settings-shortcuts-zh.png" width="420" alt="快捷键列表"> |
+
+| 通用 | 关于 |
+|---|---|
+| <img src="docs/images/settings-general-zh.png" width="420" alt="通用设置"> | <img src="docs/images/settings-about-zh.png" width="420" alt="关于"> |
 
 <p align="center"><img src="docs/images/hud-zh.png" width="240" alt="启动提示"></p>
 
@@ -83,7 +104,7 @@
 小提示：
 
 - 可以用单个字母或数字作快捷键，但这个键会在所有 App 中被拦截，无法再正常输入。单键推荐用 `F1`–`F20`。
-- 「设置 › 通用」中可以切换界面语言，修改速查面板的快捷键和呼出方式、启动提示、再按一次隐藏、登录时启动。
+- 「设置 › 通用」中可以切换界面语言和外观（浅色 / 深色），修改速查面板的快捷键和呼出方式、启动提示、再按一次隐藏、登录时启动。
 - 快捷键保存在 `~/Library/Application Support/QuickOpen/shortcuts.json`。如果文件损坏无法读取，会备份为 `shortcuts.corrupted-<时间>.json`，不会被覆盖。
 
 ## 从源码构建
@@ -117,7 +138,7 @@ QUICKOPEN_SNAPSHOT_DIR=/tmp/quickopen-shots swift test --filter SnapshotTests
 README 中的中英文截图由以下命令生成：
 
 ```bash
-QUICKOPEN_README_IMAGES=1 QUICKOPEN_SNAPSHOT_DIR=/tmp/qo swift test --filter testRenderReadmeImages
+QUICKOPEN_README_IMAGES=1 QUICKOPEN_SNAPSHOT_DIR=/tmp/qo swift test --filter 'testRenderReadmeImages|testRenderReadmeKeyboard'
 ```
 
 演示视频由 App 真实的界面组件渲染生成，不需要录屏：

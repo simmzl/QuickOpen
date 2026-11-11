@@ -30,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             options: [.userInitiatedAllowingIdleSystemSleep],
             reason: "QuickOpen responds to global shortcuts"
         )
+        NSApp.appearance = preferences.appearanceMode.appearance
         launcher.hidesWhenFrontmost = preferences.hidesWhenFrontmost
         overview.onLaunch = { [weak self] shortcut in self?.launch(shortcut) }
         overview.isRunning = { [weak self] shortcut in self?.launcher.runningApplication(for: shortcut) != nil }
@@ -122,6 +123,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func preferencesChanged() {
         launcher.hidesWhenFrontmost = preferences.hidesWhenFrontmost
+        let appearance = preferences.appearanceMode.appearance
+        if NSApp.appearance?.name != appearance?.name { NSApp.appearance = appearance }
         // 速查面板快捷键的重新注册由录制流程（SettingsContext）负责，这里只刷新菜单。
         rebuildMenu()
     }

@@ -5,11 +5,13 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTo
     private enum Tab: String, CaseIterable {
         case shortcuts
         case general
+        case about
 
         var title: String {
             switch self {
             case .shortcuts: return L("Shortcuts", "快捷键")
             case .general: return L("General", "通用")
+            case .about: return L("About", "关于")
             }
         }
 
@@ -17,6 +19,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTo
             switch self {
             case .shortcuts: return "command.square"
             case .general: return "gearshape"
+            case .about: return "info.circle"
             }
         }
 
@@ -26,8 +29,12 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTo
     let context: SettingsContext
     private let shortcutsController: ShortcutsViewController
     private let generalController: GeneralViewController
+    private let aboutController = AboutViewController()
     private var currentTab: Tab = .shortcuts
-    private static let contentSize = NSSize(width: 680, height: 580)
+    /// 默认尺寸放得下一把清晰的键盘；窗口可拖拽放大，尺寸会被记住。
+    private static let defaultSize = NSSize(width: 900, height: 720)
+    private static let minimumSize = NSSize(width: 680, height: 560)
+    private static let frameAutosaveName = "QuickOpenSettingsWindow"
 
     var onShowOverview: (() -> Void)? {
         get { generalController.onShowOverview }
@@ -40,12 +47,13 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTo
         generalController = GeneralViewController(context: context)
 
         let window = NSWindow(
-            contentRect: NSRect(origin: .zero, size: Self.contentSize),
-            styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
+            contentRect: NSRect(origin: .zero, size: Self.defaultSize),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.isReleasedWhenClosed = false
+        window.contentMinSize = Self.minimumSize
         window.toolbarStyle = .preference
         // 让磨砂背景延伸到标题栏下方，整窗一体。
         window.titlebarAppearsTransparent = true
@@ -64,6 +72,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTo
 
         select(.shortcuts)
         window.center()
+        // 恢复用户上次拖拽后的尺寸和位置（首次使用默认尺寸）。
+        window.setFrameAutosaveName(Self.frameAutosaveName)
     }
 
     required init?(coder: NSCoder) { nil }
@@ -85,13 +95,18 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTo
         context.cancelRecording()
         currentTab = tab
         window.toolbar?.selectedItemIdentifier = tab.identifier
-        window.title = tab.title
-        let controller: NSViewController = tab == .shortcuts ? shortcutsController : generalController
-        // 保持窗口左上角位置与尺寸不变，仅替换内容。
+        // 窗口标题始终是 App 名，当前页由工具栏选中状态表示。
+        window.title = "QuickOpen"
+        let controller: NSViewController
+        switch tab {
+        case .shortcuts: controller = shortcutsController
+        case .general: controller = generalController
+        case .about: controller = aboutController
+        }
+        // 保持窗口位置与尺寸不变，仅替换内容（两个页面共用用户调整后的尺寸）。
         let frame = window.frame
         window.contentViewController = controller
-        window.setContentSize(Self.contentSize)
-        window.setFrameTopLeftPoint(NSPoint(x: frame.minX, y: frame.maxY))
+        window.setFrame(frame, display: true)
     }
 
     @objc private func toolbarItemSelected(_ sender: NSToolbarItem) {
