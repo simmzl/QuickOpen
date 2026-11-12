@@ -1066,6 +1066,11 @@ final class KeyboardMapView: NSView {
         let g = geo
         for icon in g.dockIcons { addCursorRect(icon.rect, cursor: .pointingHand) }
         for label in g.dockLabels where label.group != nil { addCursorRect(label.rect, cursor: .pointingHand) }
+        // 键位都可点击（分配 / 查看 App、切换修饰键分组）；不可用的装饰键保持箭头。
+        for (index, rect) in g.keyRects.enumerated() {
+            let key = KeyboardLayout.keys[index]
+            if key.keyCode != nil, !key.isInert { addCursorRect(rect, cursor: .pointingHand) }
+        }
     }
 
     // MARK: 点击

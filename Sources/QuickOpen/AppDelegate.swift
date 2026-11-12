@@ -30,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             options: [.userInitiatedAllowingIdleSystemSleep],
             reason: "QuickOpen responds to global shortcuts"
         )
+        PointerCursor.install()
         NSApp.appearance = preferences.appearanceMode.appearance
         launcher.hidesWhenFrontmost = preferences.hidesWhenFrontmost
         overview.onLaunch = { [weak self] shortcut in self?.launch(shortcut) }

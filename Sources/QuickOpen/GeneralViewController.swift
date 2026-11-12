@@ -25,7 +25,7 @@ final class GeneralViewController: NSViewController {
     private let previewButton = NSButton(title: L("Preview", "预览"), target: nil, action: nil)
     private let languagePopup = NSPopUpButton()
     private let languageNote = NSTextField(labelWithString: "")
-    private let appearanceControl = NSSegmentedControl()
+    private let appearanceControl = PillSegmentedControl()
 
     init(context: SettingsContext) {
         self.context = context
@@ -57,7 +57,7 @@ final class GeneralViewController: NSViewController {
             loginNote.textColor = .secondaryLabelColor
         }
         hideCheckbox.state = preferences.hidesWhenFrontmost ? .on : .off
-        appearanceControl.selectedSegment = AppearanceMode.allCases.firstIndex(of: preferences.appearanceMode) ?? 0
+        appearanceControl.selectedIndex = AppearanceMode.allCases.firstIndex(of: preferences.appearanceMode) ?? 0
 
         overviewControl.hotKey = preferences.overviewHotKey
         overviewControl.placeholder = L("Off · Click to record", "已关闭 · 点击录制")
@@ -84,7 +84,11 @@ final class GeneralViewController: NSViewController {
         positionPopup.selectItem(at: HUDPosition.allCases.firstIndex(of: preferences.hudPosition) ?? 0)
         durationSlider.doubleValue = preferences.hudDuration
         durationLabel.stringValue = String(format: L("%.1f s", "%.1f 秒"), preferences.hudDuration)
-        [positionPopup, durationSlider, previewButton].forEach { $0.isEnabled = preferences.showsLaunchHUD }
+        [positionPopup, durationSlider, previewButton].forEach {
+            $0.isEnabled = preferences.showsLaunchHUD
+            // 启用状态变化后重新计算光标区域（禁用的控件不显示手形光标）。
+            view.window?.invalidateCursorRects(for: $0)
+        }
     }
 
     // MARK: 界面
@@ -155,13 +159,11 @@ final class GeneralViewController: NSViewController {
         languageNote.textColor = .secondaryLabelColor
         languageNote.isHidden = true
 
-        appearanceControl.segmentStyle = .rounded
-        appearanceControl.trackingMode = .selectOne
-        appearanceControl.segmentCount = AppearanceMode.allCases.count
-        for (index, mode) in AppearanceMode.allCases.enumerated() {
-            let symbol = mode == .system ? "circle.lefthalf.filled" : mode == .light ? "sun.max" : "moon"
-            appearanceControl.setImage(NSImage(systemSymbolName: symbol, accessibilityDescription: mode.title), forSegment: index)
-            appearanceControl.setLabel(mode.title, forSegment: index)
+        // 与「快捷键」页的列表 / 键盘切换使用同一个胶囊分段控件。
+        appearanceControl.segments = AppearanceMode.allCases.map { mode in
+            .init(title: mode.title,
+                  symbol: mode == .system ? "circle.lefthalf.filled" : mode == .light ? "sun.max" : "moon",
+                  toolTip: nil)
         }
         appearanceControl.target = self
         appearanceControl.action = #selector(changeAppearance)
@@ -326,7 +328,7 @@ final class GeneralViewController: NSViewController {
     }
 
     @objc private func changeAppearance() {
-        let index = appearanceControl.selectedSegment
+        let index = appearanceControl.selectedIndex
         guard AppearanceMode.allCases.indices.contains(index) else { return }
         context.preferences.appearanceMode = AppearanceMode.allCases[index]
     }

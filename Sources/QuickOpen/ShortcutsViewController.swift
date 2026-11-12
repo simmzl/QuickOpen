@@ -195,16 +195,8 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
         emptyView.onAdd = { [weak self] in self?.addApplication() }
         emptyView.onDropApplications = { [weak self] urls in self?.add(urls) }
 
-        let addButton = NSButton(title: L("Add App", "添加 App"), target: self, action: #selector(addApplication))
-        addButton.bezelStyle = .push
-        addButton.controlSize = .large
-        addButton.bezelColor = .controlAccentColor
-        addButton.image = NSImage(systemSymbolName: "plus", accessibilityDescription: nil)?
-            .withSymbolConfiguration(.init(pointSize: 12, weight: .semibold))
-        addButton.imagePosition = .imageLeading
-        addButton.imageHugsTitle = true
+        let addButton = PrimaryButton(title: L("Add App", "添加 App"), symbol: "plus", target: self, action: #selector(addApplication))
         addButton.toolTip = L("Add apps (⌘N)", "添加 App（⌘N）")
-        addButton.focusRingType = .none
         addButton.keyEquivalent = "n"
         addButton.keyEquivalentModifierMask = [.command]
 

@@ -87,6 +87,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTo
         window?.orderFrontRegardless()
         window?.makeKey()
         resetFocus()
+        // 工具栏页签在窗口显示后才创建视图，下一轮 runloop 再加手形光标。
+        DispatchQueue.main.async { [weak self] in PointerCursor.installToolbarCursor(in: self?.window) }
     }
 
     /// 打开窗口或切换页面时，AppKit 会把焦点交给第一个可聚焦的控件
