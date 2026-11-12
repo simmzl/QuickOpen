@@ -5,6 +5,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-11-12
+
+### Changed
+- **Pointer cursor on everything clickable:** the Settings toolbar tabs, buttons, checkboxes, radio buttons, pop-up menus, sliders, switches and the keys in the keyboard view now show the pointing-hand cursor. Disabled controls keep the arrow.
+- Settings → General → Appearance uses the same pill switch as List / Keyboard instead of the blue segmented control.
+- Icons and labels in pill switches and the **Add App** button sit closer together and are optically centered, so Chinese and English text line up with the icon.
+- README: refreshed settings screenshots.
+
 ## [1.4.1] - 2026-11-12
 
 ### Changed
@@ -96,7 +104,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - Initial release.
 
-[Unreleased]: https://github.com/simmzl/QuickOpen/compare/v1.4.1...HEAD
+[Unreleased]: https://github.com/simmzl/QuickOpen/compare/v1.4.2...HEAD
+[1.4.2]: https://github.com/simmzl/QuickOpen/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/simmzl/QuickOpen/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/simmzl/QuickOpen/compare/v1.3.2...v1.4.0
 [1.3.2]: https://github.com/simmzl/QuickOpen/compare/v1.3.1...v1.3.2
