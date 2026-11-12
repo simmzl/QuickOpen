@@ -44,6 +44,21 @@ enum ShortcutsViewStyle: String, CaseIterable {
     }
 }
 
+/// 列表视图的排列方式。
+enum ShortcutsListOrder: String, CaseIterable {
+    /// 按修饰键分组、组内按键位排序（默认）。
+    case byKey
+    /// 用户拖动排出的顺序（也是速查面板的顺序）。
+    case custom
+
+    var title: String {
+        switch self {
+        case .byKey: return L("By Key", "按键位")
+        case .custom: return L("Custom Order", "自定义顺序")
+        }
+    }
+}
+
 /// 外观：跟随系统 / 浅色 / 深色。
 enum AppearanceMode: String, CaseIterable {
     case system
@@ -83,6 +98,7 @@ final class Preferences {
         static let hudDuration = "hudDuration"
         static let shortcutsViewStyle = "shortcutsViewStyle"
         static let appearanceMode = "appearanceMode"
+        static let shortcutsListOrder = "shortcutsListOrder"
     }
 
     static let hudDurationRange: ClosedRange<Double> = 0.3...2.0
@@ -145,6 +161,13 @@ final class Preferences {
     var shortcutsViewStyle: ShortcutsViewStyle {
         get { ShortcutsViewStyle(rawValue: defaults.string(forKey: Key.shortcutsViewStyle) ?? "") ?? .list }
         set { defaults.set(newValue.rawValue, forKey: Key.shortcutsViewStyle) }
+    }
+
+    /// 列表视图（以及菜单栏菜单）的排列方式。
+    var shortcutsListOrder: ShortcutsListOrder {
+        get { ShortcutsListOrder(rawValue: defaults.string(forKey: Key.shortcutsListOrder) ?? "") ?? .byKey }
+        // 发通知：菜单栏菜单的 App 顺序跟随这个设置。
+        set { defaults.set(newValue.rawValue, forKey: Key.shortcutsListOrder); changed() }
     }
 
     /// 界面外观；设置后立即应用到整个 App（设置窗口、速查面板、启动提示）。

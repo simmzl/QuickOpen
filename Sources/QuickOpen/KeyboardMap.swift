@@ -49,6 +49,12 @@ enum KeyboardLayout {
         return map
     }()
 
+    /// 键在键盘上的阅读顺序（从上到下、从左到右），用于“按键位”排序；不在布局里的键排最后。
+    static func readingOrder(of keyCode: UInt32) -> CGFloat {
+        guard let key = keyByCode[keyCode] else { return 99_999 + CGFloat(keyCode) }
+        return key.frame.minY * 100 + key.frame.minX
+    }
+
     /// 每个修饰位在键盘上的主键（左侧那颗）。
     static func primaryKeyCode(forModifier bit: UInt32) -> UInt32? {
         switch bit {

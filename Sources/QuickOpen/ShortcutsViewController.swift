@@ -9,11 +9,18 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
     private let emptyView = EmptyStateView()
     private let hintLabel = NSTextField(labelWithString: "")
     private let keyboardView = KeyboardMapView()
-    private let styleControl = NSSegmentedControl()
+    private let styleControl = PillSegmentedControl()
+    private let orderControl = PillSegmentedControl()
+    private let countLabel = NSTextField(labelWithString: "")
+    private var subbar: NSStackView!
+    /// 列表当前显示的行（分组标题 + App）。
+    private var items: [ShortcutListItem] = []
+    /// 鼠标所在的行，用于行背景高亮。
+    private var hoveredRow: Int?
     /// 在键盘视图里点空闲键后「添加 App…」：添加完成后直接绑定到这个快捷键。
     private var pendingAssignHotKey: HotKey?
     private static let rowDragType = NSPasteboard.PasteboardType("com.simmzl.quickopen.row")
-    private static var defaultHint: String { L("Single keys or combinations · Drag to reorder · Drop apps here to add", "支持单键或组合键 · 拖动可排序 · 可把 App 直接拖进来") }
+    private static var defaultHint: String { L("Click a keycap to change it · Hover for more · Drop apps here to add", "点击键帽修改快捷键 · 悬停显示更多操作 · 可把 App 直接拖进来") }
     private static var keyboardHint: String { L("Hover to preview · Click a key to assign · Hold ⌃⌥⇧⌘ to switch groups", "悬停查看 · 点击键帽绑定 · 按住 ⌃⌥⇧⌘ 切换分组 · 可把 App 拖进来") }
     private var idleHint: String { style == .keyboard ? Self.keyboardHint : Self.defaultHint }
 
@@ -51,14 +58,20 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
 
     private var style: ShortcutsViewStyle { context.preferences.shortcutsViewStyle }
 
+    private var order: ShortcutsListOrder { context.preferences.shortcutsListOrder }
+
     func refresh() {
+        items = ShortcutListBuilder.items(for: context.store.shortcuts, order: order)
         tableView.reloadData()
         let isEmpty = context.store.shortcuts.isEmpty
         let keyboard = style == .keyboard
         emptyView.isHidden = !isEmpty || keyboard
         scrollView.isHidden = isEmpty || keyboard
+        subbar.isHidden = isEmpty || keyboard
+        orderControl.selectedIndex = order == .byKey ? 0 : 1
+        countLabel.stringValue = Self.countText(context.store.shortcuts)
         keyboardView.isHidden = !keyboard
-        styleControl.selectedSegment = keyboard ? 1 : 0
+        styleControl.selectedIndex = keyboard ? 1 : 0
         keyboardView.shortcuts = context.store.shortcuts
         keyboardView.overviewHotKey = context.preferences.overviewHotKey
         keyboardView.failures = context.registrationFailures
@@ -66,6 +79,23 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
         if context.recordingTarget == nil || context.recordingTarget == SettingsContext.overviewHotKeyID {
             setHint(idleHint, highlighted: false)
         }
+    }
+
+    /// “8 个 App · 6 个单键，1 组组合键”
+    static func countText(_ shortcuts: [AppShortcut]) -> String {
+        let bound = shortcuts.filter { $0.hotKey != nil }
+        let singles = bound.filter { $0.hotKey!.modifiers == 0 }.count
+        let combos = Set(bound.compactMap { $0.hotKey!.modifiers == 0 ? nil : $0.hotKey!.modifiers }).count
+        let unset = shortcuts.count - bound.count
+        var text = L("\(shortcuts.count) apps", "\(shortcuts.count) 个 App")
+        if combos == 0, unset == 0 {
+            text += L(" · all on single keys", " · 全部为单键")
+        } else {
+            text += L(" · \(singles) single keys, \(combos) modifier combination\(combos == 1 ? "" : "s")",
+                      " · \(singles) 个单键，\(combos) 组组合键")
+            if unset > 0 { text += L(" · \(unset) not set", " · \(unset) 个未设置") }
+        }
+        return text
     }
 
     @objc private func runningApplicationsChanged() {
@@ -77,22 +107,18 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
 
     private func buildInterface() {
         let titleLabel = NSTextField(labelWithString: L("App Shortcuts", "App 快捷键"))
-        titleLabel.font = .systemFont(ofSize: 20, weight: .semibold)
+        titleLabel.font = .systemFont(ofSize: 22, weight: .bold)
         let subtitleLabel = NSTextField(labelWithString: L("Press a shortcut to bring its app to the front, or launch it if it isn’t running.", "按下快捷键，目标 App 立即来到前台；未运行时自动启动。"))
-        subtitleLabel.font = .systemFont(ofSize: 12)
+        subtitleLabel.font = .systemFont(ofSize: 13)
         subtitleLabel.textColor = .secondaryLabelColor
-        styleControl.segmentStyle = .rounded
-        styleControl.trackingMode = .selectOne
-        styleControl.segmentCount = ShortcutsViewStyle.allCases.count
-        for (index, item) in ShortcutsViewStyle.allCases.enumerated() {
-            styleControl.setImage(NSImage(systemSymbolName: item == .list ? "list.bullet" : "keyboard",
-                                          accessibilityDescription: item.title), forSegment: index)
-            styleControl.setLabel(item.title, forSegment: index)
-            styleControl.setToolTip(item == .list ? L("Show as a list", "以列表显示") : L("Show on a keyboard", "在键盘上显示"), forSegment: index)
+        subtitleLabel.lineBreakMode = .byTruncatingTail
+        subtitleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        styleControl.segments = ShortcutsViewStyle.allCases.map {
+            .init(title: $0.title, symbol: $0 == .list ? "list.bullet" : "keyboard",
+                  toolTip: $0 == .list ? L("Show as a list", "以列表显示") : L("Show on a keyboard", "在键盘上显示"))
         }
         styleControl.target = self
         styleControl.action = #selector(styleChanged)
-        styleControl.controlSize = .regular
 
         keyboardView.onRecord = { [weak self] id in self?.beginRecording(id: id) }
         keyboardView.onDelete = { [weak self] id in
@@ -117,14 +143,31 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
         let header = NSStackView(views: [titleLabel, subtitleLabel])
         header.orientation = .vertical
         header.alignment = .leading
-        header.spacing = 3
+        header.spacing = 4
+
+        orderControl.size = .small
+        orderControl.segments = [
+            .init(title: ShortcutsListOrder.byKey.title, symbol: "keyboard.badge.ellipsis",
+                  toolTip: L("Group by modifiers, sort by key", "按修饰键分组、按键位排序")),
+            .init(title: ShortcutsListOrder.custom.title, symbol: "line.3.horizontal",
+                  toolTip: L("Drag to reorder (also the overview and menu order)", "拖动排序（也是速查面板和菜单的顺序）"))
+        ]
+        orderControl.target = self
+        orderControl.action = #selector(orderChanged)
+        countLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        countLabel.textColor = .tertiaryLabelColor
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.init(1), for: .horizontal)
+        subbar = NSStackView(views: [countLabel, spacer, orderControl])
+        subbar.orientation = .horizontal
+        subbar.alignment = .centerY
 
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("row"))
         column.resizingMask = .autoresizingMask
         tableView.addTableColumn(column)
         tableView.headerView = nil
-        tableView.rowHeight = 60
-        tableView.intercellSpacing = NSSize(width: 0, height: 6)
+        tableView.rowHeight = 56
+        tableView.intercellSpacing = NSSize(width: 0, height: 0)
         tableView.backgroundColor = .clear
         tableView.selectionHighlightStyle = .none
         tableView.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
@@ -133,8 +176,13 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
         tableView.delegate = self
         tableView.registerForDraggedTypes([Self.rowDragType, .fileURL])
         tableView.draggingDestinationFeedbackStyle = .gap
+        tableView.onHoverRow = { [weak self] row in self?.setHoveredRow(row) }
         tableView.setDraggingSourceOperationMask(.move, forLocal: true)
-        tableView.onDeleteKey = { [weak self] row in self?.confirmDelete(row: row) }
+        tableView.onDeleteKey = { [weak self] row in
+            guard let self, let id = self.appID(at: row),
+                  let index = self.context.store.shortcuts.firstIndex(where: { $0.id == id }) else { return }
+            self.confirmDelete(row: index)
+        }
 
         scrollView.documentView = tableView
         scrollView.hasVerticalScroller = true
@@ -147,10 +195,16 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
         emptyView.onAdd = { [weak self] in self?.addApplication() }
         emptyView.onDropApplications = { [weak self] urls in self?.add(urls) }
 
-        let addButton = NSButton(title: L("Add App…", "添加 App…"), target: self, action: #selector(addApplication))
-        addButton.applyGlassStyle()
-        addButton.image = NSImage(systemSymbolName: "plus", accessibilityDescription: nil)
+        let addButton = NSButton(title: L("Add App", "添加 App"), target: self, action: #selector(addApplication))
+        addButton.bezelStyle = .push
+        addButton.controlSize = .large
+        addButton.bezelColor = .controlAccentColor
+        addButton.image = NSImage(systemSymbolName: "plus", accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: 12, weight: .semibold))
         addButton.imagePosition = .imageLeading
+        addButton.imageHugsTitle = true
+        addButton.toolTip = L("Add apps (⌘N)", "添加 App（⌘N）")
+        addButton.focusRingType = .none
         addButton.keyEquivalent = "n"
         addButton.keyEquivalentModifierMask = [.command]
 
@@ -162,39 +216,47 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
         let footer = NSStackView(views: [addButton, hintLabel])
         footer.orientation = .horizontal
         footer.alignment = .centerY
-        footer.spacing = 12
+        footer.spacing = 14
 
-        [header, styleControl, scrollView, emptyView, keyboardView, footer].forEach {
+        [header, styleControl, subbar, scrollView, emptyView, keyboardView, footer].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview($0)
         }
         NSLayoutConstraint.activate([
-            header.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 18),
-            header.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+            header.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 20),
+            header.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 28),
             header.trailingAnchor.constraint(lessThanOrEqualTo: styleControl.leadingAnchor, constant: -12),
-            styleControl.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
-            styleControl.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            styleControl.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -28),
+            styleControl.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
             keyboardView.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 8),
             keyboardView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
             keyboardView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
             keyboardView.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -8),
-            scrollView.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 14),
-            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 18),
-            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -18),
-            scrollView.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -12),
-            emptyView.topAnchor.constraint(equalTo: scrollView.topAnchor),
-            emptyView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
-            emptyView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            subbar.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 22),
+            subbar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 28),
+            subbar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -28),
+            scrollView.topAnchor.constraint(equalTo: subbar.bottomAnchor, constant: 8),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 26),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -26),
+            scrollView.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -14),
+            emptyView.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 14),
+            emptyView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 28),
+            emptyView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -28),
             emptyView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
-            footer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
-            footer.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -24),
-            footer.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -18)
+            footer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 28),
+            footer.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -28),
+            footer.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -22)
         ])
         setHint(idleHint, highlighted: false)
     }
 
+    /// 键盘模式下由键盘视图接收 Esc / 修饰键；列表模式不预先聚焦。
+    var preferredFirstResponder: NSResponder? {
+        style == .keyboard && context.store.shortcuts.isEmpty == false ? keyboardView : nil
+    }
+
     @objc private func styleChanged() {
-        let newStyle: ShortcutsViewStyle = styleControl.selectedSegment == 1 ? .keyboard : .list
+        let newStyle: ShortcutsViewStyle = styleControl.selectedIndex == 1 ? .keyboard : .list
         guard newStyle != style else { return }
         if context.recordingTarget != nil { context.cancelRecording() }
         context.preferences.shortcutsViewStyle = newStyle
@@ -232,37 +294,89 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
     // MARK: 表格
 
     func numberOfRows(in tableView: NSTableView) -> Int {
-        context.store.shortcuts.count
+        items.count
+    }
+
+    private func appID(at row: Int) -> UUID? {
+        guard items.indices.contains(row), case .app(let id) = items[row] else { return nil }
+        return id
+    }
+
+    /// 某一行在所在分组中是否是首行 / 末行（用于拼接圆角卡片）。
+    private func groupEdges(at row: Int) -> (first: Bool, last: Bool) {
+        let first = row == 0 || appID(at: row - 1) == nil
+        let last = row == items.count - 1 || appID(at: row + 1) == nil
+        return (first, last)
+    }
+
+    func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
+        guard items.indices.contains(row), case .header = items[row] else { return 56 }
+        return row == 0 ? 26 : 38
     }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        guard context.store.shortcuts.indices.contains(row) else { return nil }
-        let shortcut = context.store.shortcuts[row]
-        let identifier = NSUserInterfaceItemIdentifier("ShortcutRow")
-        let cell = tableView.makeView(withIdentifier: identifier, owner: self) as? ShortcutRowView
-            ?? ShortcutRowView()
-        cell.identifier = identifier
-        cell.configure(
-            shortcut: shortcut,
-            isRunning: isRunning(shortcut),
-            isRecording: context.recordingTarget == shortcut.id,
-            failure: context.registrationFailures[shortcut.id]
-        )
-        cell.onRecord = { [weak self] in self?.beginRecording(id: shortcut.id) }
-        cell.onDelete = { [weak self] in
-            guard let self, let index = self.context.store.shortcuts.firstIndex(where: { $0.id == shortcut.id })
-            else { return }
-            self.confirmDelete(row: index)
+        guard items.indices.contains(row) else { return nil }
+        switch items[row] {
+        case .header(let modifiers, let count):
+            let identifier = NSUserInterfaceItemIdentifier("GroupHeader")
+            let cell = tableView.makeView(withIdentifier: identifier, owner: self) as? GroupHeaderView ?? GroupHeaderView()
+            cell.identifier = identifier
+            cell.configure(modifiers: modifiers, count: count)
+            return cell
+        case .app(let id):
+            guard let shortcut = context.store.shortcut(id: id) else { return nil }
+            let identifier = NSUserInterfaceItemIdentifier("ShortcutListRow")
+            let cell = tableView.makeView(withIdentifier: identifier, owner: self) as? ShortcutListRowView ?? ShortcutListRowView()
+            cell.identifier = identifier
+            cell.configure(
+                shortcut: shortcut,
+                isRunning: isRunning(shortcut),
+                isRecording: context.recordingTarget == shortcut.id,
+                failure: context.registrationFailures[shortcut.id],
+                showsGrip: order == .custom
+            )
+            cell.onRecord = { [weak self] in self?.beginRecording(id: id) }
+            cell.onDelete = { [weak self] in
+                guard let self, let index = self.context.store.shortcuts.firstIndex(where: { $0.id == id }) else { return }
+                self.confirmDelete(row: index)
+            }
+            cell.onPreview = { [weak self] in
+                guard let self, let current = self.context.store.shortcut(id: id) else { return }
+                self.context.previewHUD(current)
+            }
+            cell.onReveal = {
+                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: shortcut.appPath)])
+            }
+            return cell
         }
-        cell.onPreview = { [weak self] in self?.context.previewHUD(shortcut) }
-        cell.onReveal = {
-            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: shortcut.appPath)])
-        }
-        return cell
     }
 
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
-        CardRowView()
+        guard appID(at: row) != nil else { return PlainRowView() }
+        let rowView = GroupedRowView()
+        let edges = groupEdges(at: row)
+        rowView.isFirstInGroup = edges.first
+        rowView.isLastInGroup = edges.last
+        rowView.separatorInset = order == .custom ? 80 : 58
+        rowView.isHovered = hoveredRow == row
+        return rowView
+    }
+
+    func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool { appID(at: row) != nil }
+
+    private func setHoveredRow(_ row: Int?) {
+        let row = row.flatMap { appID(at: $0) != nil ? $0 : nil }
+        guard row != hoveredRow else { return }
+        if let old = hoveredRow, let view = tableView.rowView(atRow: old, makeIfNecessary: false) as? GroupedRowView { view.isHovered = false }
+        hoveredRow = row
+        if let row, let view = tableView.rowView(atRow: row, makeIfNecessary: false) as? GroupedRowView { view.isHovered = true }
+    }
+
+    @objc private func orderChanged() {
+        let newOrder: ShortcutsListOrder = orderControl.selectedIndex == 1 ? .custom : .byKey
+        guard newOrder != order else { return }
+        context.preferences.shortcutsListOrder = newOrder
+        refresh()
     }
 
     private func isRunning(_ shortcut: AppShortcut) -> Bool {
@@ -272,7 +386,8 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
     // MARK: 拖拽：行内排序 + 从访达拖入 .app
 
     func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
-        guard context.recordingTarget == nil else { return nil }
+        // 只有“自定义顺序”可以拖动排序；按键位时顺序由快捷键决定。
+        guard context.recordingTarget == nil, order == .custom, appID(at: row) != nil else { return nil }
         let item = NSPasteboardItem()
         item.setString(String(row), forType: Self.rowDragType)
         return item
@@ -349,7 +464,7 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
             return
         }
         if addedIDs.count == 1 {
-            if let row = context.store.shortcuts.firstIndex(where: { $0.id == addedIDs[0] }) {
+            if let row = items.firstIndex(of: .app(addedIDs[0])) {
                 tableView.scrollRowToVisible(row)
             }
             beginRecording(id: addedIDs[0])
@@ -379,188 +494,31 @@ final class ShortcutsViewController: NSViewController, NSTableViewDataSource, NS
     }
 }
 
-// MARK: - 行视图
-
-/// 玻璃卡片背景的行。
-private final class CardRowView: NSTableRowView {
-    private let card = GlassSurface(kind: .card, cornerRadius: 14)
-
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        card.translatesAutoresizingMaskIntoConstraints = true
-        addSubview(card, positioned: .below, relativeTo: nil)
-    }
-
-    required init?(coder: NSCoder) { nil }
-
-    override func layout() {
-        super.layout()
-        card.frame = bounds.insetBy(dx: 6, dy: 0)
-    }
-
-    override func didAddSubview(_ subview: NSView) {
-        super.didAddSubview(subview)
-        // 单元格视图总是在玻璃卡片之上（用 frame 布局，重新插入不会丢约束）。
-        if subview !== card, subviews.first !== card, card.superview === self {
-            addSubview(card, positioned: .below, relativeTo: nil)
-        }
-    }
-
-    override func drawBackground(in dirtyRect: NSRect) {}
-    override func drawSelection(in dirtyRect: NSRect) {}
-    override var isEmphasized: Bool { get { false } set {} }
-}
-
-private final class ShortcutRowView: NSTableCellView {
-    var onRecord: (() -> Void)?
-    var onDelete: (() -> Void)?
-    var onPreview: (() -> Void)?
-    var onReveal: (() -> Void)?
-
-    private let iconView = NSImageView()
-    private let nameLabel = NSTextField(labelWithString: "")
-    private let detailLabel = NSTextField(labelWithString: "")
-    /// 中性的“运行中”小圆点。
-    private let runningBadge = DotView()
-    private let hotKeyControl = HotKeyControl()
-    private let deleteButton = NSButton()
+/// 支持 Delete 键删除当前行的表格。
+private final class ShortcutTableView: NSTableView {
+    var onDeleteKey: ((Int) -> Void)?
+    /// 鼠标所在行变化（nil 表示离开表格）。
+    var onHoverRow: ((Int?) -> Void)?
     private var hoverArea: NSTrackingArea?
-
-    init() {
-        super.init(frame: .zero)
-
-        iconView.imageScaling = .scaleProportionallyUpOrDown
-        nameLabel.font = .systemFont(ofSize: 13, weight: .semibold)
-        nameLabel.lineBreakMode = .byTruncatingTail
-        detailLabel.font = .systemFont(ofSize: 11)
-        detailLabel.textColor = .secondaryLabelColor
-        detailLabel.lineBreakMode = .byTruncatingMiddle
-
-        runningBadge.wantsLayer = true
-        runningBadge.toolTip = L("Running", "正在运行")
-        runningBadge.setAccessibilityLabel(L("Running", "正在运行"))
-        runningBadge.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            runningBadge.widthAnchor.constraint(equalToConstant: 6),
-            runningBadge.heightAnchor.constraint(equalToConstant: 6)
-        ])
-
-        let nameRow = NSStackView(views: [nameLabel, runningBadge])
-        nameRow.orientation = .horizontal
-        nameRow.spacing = 6
-        nameRow.alignment = .centerY
-        let texts = NSStackView(views: [nameRow, detailLabel])
-        texts.orientation = .vertical
-        texts.alignment = .leading
-        texts.spacing = 2
-
-        hotKeyControl.target = self
-        hotKeyControl.action = #selector(record)
-
-        deleteButton.image = NSImage(systemSymbolName: "trash", accessibilityDescription: L("Remove", "删除"))
-        deleteButton.bezelStyle = .inline
-        deleteButton.isBordered = false
-        deleteButton.contentTintColor = .secondaryLabelColor
-        deleteButton.target = self
-        deleteButton.action = #selector(delete)
-        deleteButton.alphaValue = 0.45
-
-        [iconView, texts, hotKeyControl, deleteButton].forEach {
-            $0.translatesAutoresizingMaskIntoConstraints = false
-            addSubview($0)
-        }
-        texts.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        nameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        detailLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-
-        NSLayoutConstraint.activate([
-            iconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 20),
-            iconView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            iconView.widthAnchor.constraint(equalToConstant: 36),
-            iconView.heightAnchor.constraint(equalToConstant: 36),
-            texts.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 12),
-            texts.centerYAnchor.constraint(equalTo: centerYAnchor),
-            texts.trailingAnchor.constraint(lessThanOrEqualTo: hotKeyControl.leadingAnchor, constant: -12),
-            deleteButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -18),
-            deleteButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-            deleteButton.widthAnchor.constraint(equalToConstant: 24),
-            hotKeyControl.trailingAnchor.constraint(equalTo: deleteButton.leadingAnchor, constant: -10),
-            hotKeyControl.widthAnchor.constraint(equalToConstant: 172),
-            hotKeyControl.centerYAnchor.constraint(equalTo: centerYAnchor)
-        ])
-
-        menu = makeContextMenu()
-    }
-
-    required init?(coder: NSCoder) { nil }
-
-    func configure(shortcut: AppShortcut, isRunning: Bool, isRecording: Bool, failure: OSStatus?) {
-        iconView.image = AppIcons.icon(forPath: shortcut.appPath, size: 36)
-        nameLabel.stringValue = shortcut.appName
-        runningBadge.isHidden = !isRunning
-        deleteButton.toolTip = L("Remove \(shortcut.appName)", "删除 \(shortcut.appName)")
-
-        hotKeyControl.hotKey = shortcut.hotKey
-        hotKeyControl.isRecording = isRecording
-        hotKeyControl.isWarning = failure != nil
-        if let failure {
-            detailLabel.stringValue = "⚠︎ " + failure.hotKeyFailureDescription
-            detailLabel.textColor = .systemRed
-            hotKeyControl.toolTip = L("Click to record again", "点击重新录制")
-        } else {
-            if let warning = shortcut.hotKey?.typingWarning {
-                detailLabel.stringValue = "⚠︎ " + warning
-                detailLabel.textColor = .systemOrange
-            } else {
-                detailLabel.stringValue = shortcut.bundleIdentifier ?? shortcut.appPath
-                detailLabel.textColor = .secondaryLabelColor
-            }
-            hotKeyControl.toolTip = shortcut.hotKey == nil ? L("Click to record a shortcut", "点击录制快捷键") : L("Click to change the shortcut", "点击修改快捷键")
-        }
-        if !FileManager.default.fileExists(atPath: shortcut.appPath),
-           shortcut.bundleIdentifier.flatMap({ NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) }) == nil {
-            detailLabel.stringValue = L("⚠︎ App not found — it may have been moved or uninstalled", "⚠︎ 找不到此 App，可能已被移动或卸载")
-            detailLabel.textColor = .systemOrange
-            iconView.alphaValue = 0.5
-        } else {
-            iconView.alphaValue = 1
-        }
-    }
-
-    private func makeContextMenu() -> NSMenu {
-        let menu = NSMenu()
-        menu.addItem(withTitle: L("Record Shortcut", "录制快捷键"), action: #selector(record), keyEquivalent: "").target = self
-        menu.addItem(withTitle: L("Preview Launch Hint", "预览启动提示"), action: #selector(preview), keyEquivalent: "").target = self
-        menu.addItem(withTitle: L("Show in Finder", "在访达中显示"), action: #selector(reveal), keyEquivalent: "").target = self
-        menu.addItem(.separator())
-        menu.addItem(withTitle: L("Remove", "删除"), action: #selector(delete), keyEquivalent: "").target = self
-        return menu
-    }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         if let hoverArea { removeTrackingArea(hoverArea) }
-        let area = NSTrackingArea(
-            rect: bounds,
-            options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
-            owner: self
-        )
+        let area = NSTrackingArea(rect: bounds, options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self)
         addTrackingArea(area)
         hoverArea = area
     }
 
-    override func mouseEntered(with event: NSEvent) { deleteButton.animator().alphaValue = 1 }
-    override func mouseExited(with event: NSEvent) { deleteButton.animator().alphaValue = 0.45 }
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        let row = self.row(at: convert(event.locationInWindow, from: nil))
+        onHoverRow?(row >= 0 ? row : nil)
+    }
 
-    @objc private func record() { onRecord?() }
-    @objc private func delete() { onDelete?() }
-    @objc private func preview() { onPreview?() }
-    @objc private func reveal() { onReveal?() }
-}
-
-/// 支持 Delete 键删除当前行的表格。
-private final class ShortcutTableView: NSTableView {
-    var onDeleteKey: ((Int) -> Void)?
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        onHoverRow?(nil)
+    }
 
     override func keyDown(with event: NSEvent) {
         if (event.keyCode == 51 || event.keyCode == 117), selectedRow >= 0 {

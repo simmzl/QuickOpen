@@ -78,7 +78,9 @@
 |---|---|
 | <img src="docs/images/settings-general-en.png" width="420" alt="General settings"> | <img src="docs/images/settings-about-en.png" width="420" alt="About"> |
 
-<p align="center"><img src="docs/images/hud-en.png" width="240" alt="Launch hint"></p>
+| Menu bar | Launch hint |
+|---|---|
+| <img src="docs/images/menu-en.png" width="300" alt="Menu bar menu with keycaps"> | <img src="docs/images/hud-en.png" width="240" alt="Launch hint"> |
 
 </details>
 

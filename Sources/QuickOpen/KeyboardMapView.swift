@@ -50,6 +50,8 @@ final class KeyboardMapView: NSView {
 
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
+    /// 只为接收 Esc / 修饰键而成为第一响应者，不画系统焦点环。
+    override var focusRingType: NSFocusRingType { get { .none } set {} }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)

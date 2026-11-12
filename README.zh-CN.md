@@ -78,7 +78,9 @@
 |---|---|
 | <img src="docs/images/settings-general-zh.png" width="420" alt="通用设置"> | <img src="docs/images/settings-about-zh.png" width="420" alt="关于"> |
 
-<p align="center"><img src="docs/images/hud-zh.png" width="240" alt="启动提示"></p>
+| 菜单栏 | 启动提示 |
+|---|---|
+| <img src="docs/images/menu-zh.png" width="300" alt="带键帽的菜单栏菜单"> | <img src="docs/images/hud-zh.png" width="240" alt="启动提示"> |
 
 </details>
 

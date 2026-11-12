@@ -86,6 +86,21 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTo
         AppLauncher.activateSelf()
         window?.orderFrontRegardless()
         window?.makeKey()
+        resetFocus()
+    }
+
+    /// 打开窗口或切换页面时，AppKit 会把焦点交给第一个可聚焦的控件
+    /// （开启“键盘导航”时连按钮、链接也会出现焦点环）。这里不预先聚焦任何控件；
+    /// 只有键盘视图需要接收 Esc，交给页面自己处理。
+    private func resetFocus() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let window = self.window else { return }
+            if self.currentTab == .shortcuts, let target = self.shortcutsController.preferredFirstResponder {
+                window.makeFirstResponder(target)
+            } else {
+                window.makeFirstResponder(nil)
+            }
+        }
     }
 
     func showGeneralTab() { present(tab: Tab.general.rawValue) }
@@ -106,7 +121,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTo
         // 保持窗口位置与尺寸不变，仅替换内容（两个页面共用用户调整后的尺寸）。
         let frame = window.frame
         window.contentViewController = controller
+        window.initialFirstResponder = nil
         window.setFrame(frame, display: true)
+        resetFocus()
     }
 
     @objc private func toolbarItemSelected(_ sender: NSToolbarItem) {

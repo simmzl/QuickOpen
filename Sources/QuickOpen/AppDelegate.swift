@@ -143,13 +143,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func rebuildMenu() {
         let menu = NSMenu()
         menu.delegate = self
+        // 与设置页一致：按键位时按修饰键分组、组内按键位排序；自定义顺序时保持用户顺序。
+        let ordered = preferences.shortcutsListOrder == .custom ? store.shortcuts
+            : ShortcutListBuilder.items(for: store.shortcuts, order: .byKey).compactMap { item -> AppShortcut? in
+                if case .app(let id) = item { return store.shortcut(id: id) } else { return nil }
+            }
+        let overviewTitle = L("Show Overview", "显示速查面板")
+        let overviewKey = registrationFailures[SettingsContext.overviewHotKeyID] == nil ? preferences.overviewHotKey : nil
+        let width = max(250, ([MenuShortcutItemView.preferredWidth(title: overviewTitle, hotKey: overviewKey)]
+            + ordered.map { MenuShortcutItemView.preferredWidth(title: $0.appName, hotKey: $0.hotKey) }).max() ?? 0)
 
-        let overviewItem = NSMenuItem(title: L("Show Overview", "显示速查面板"), action: #selector(showOverviewFromMenu), keyEquivalent: "")
+        let overviewItem = NSMenuItem(title: overviewTitle, action: #selector(showOverviewFromMenu), keyEquivalent: "")
         overviewItem.target = self
-        overviewItem.image = NSImage(systemSymbolName: "square.grid.2x2", accessibilityDescription: nil)
-        if registrationFailures[SettingsContext.overviewHotKeyID] == nil {
-            Self.applyKeyEquivalent(preferences.overviewHotKey, to: overviewItem)
-        }
+        let gridIcon = NSImage(systemSymbolName: "square.grid.2x2", accessibilityDescription: nil)
+        gridIcon?.isTemplate = true
+        overviewItem.view = MenuShortcutItemView(title: overviewTitle, icon: gridIcon, hotKey: overviewKey,
+                                                 unavailable: false, width: width) { [weak self] in self?.showOverviewFromMenu() }
         menu.addItem(overviewItem)
 
         let settingsItem = NSMenuItem(title: L("Settings…", "设置…"), action: #selector(showSettings), keyEquivalent: ",")
@@ -175,22 +184,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if #available(macOS 14.0, *) {
                 menu.addItem(NSMenuItem.sectionHeader(title: "App"))
             }
-            for shortcut in store.shortcuts {
-                let item = NSMenuItem(
-                    title: shortcut.appName,
-                    action: #selector(activateApplication(_:)),
-                    keyEquivalent: ""
-                )
+            for shortcut in ordered {
+                let item = NSMenuItem(title: shortcut.appName, action: #selector(activateApplication(_:)), keyEquivalent: "")
                 item.target = self
                 item.representedObject = shortcut.id.uuidString
-                let icon = NSWorkspace.shared.icon(forFile: shortcut.appPath)
-                icon.size = NSSize(width: 16, height: 16)
-                item.image = icon
-                if registrationFailures[shortcut.id] != nil {
-                    item.title = L("\(shortcut.appName) (shortcut unavailable)", "\(shortcut.appName)（快捷键被占用）")
-                } else {
-                    // 使用系统菜单的右对齐快捷键样式展示。
-                    Self.applyKeyEquivalent(shortcut.hotKey, to: item)
+                let id = shortcut.id
+                let unavailable = registrationFailures[shortcut.id] != nil
+                item.view = MenuShortcutItemView(
+                    title: unavailable ? L("\(shortcut.appName) (shortcut unavailable)", "\(shortcut.appName)（快捷键被占用）") : shortcut.appName,
+                    icon: AppIcons.icon(forPath: shortcut.appPath, size: 18),
+                    hotKey: shortcut.hotKey, unavailable: unavailable, width: width
+                ) { [weak self] in
+                    guard let self, let current = self.store.shortcut(id: id) else { return }
+                    self.launch(current)
                 }
                 menu.addItem(item)
             }
@@ -202,33 +208,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         quitItem.target = self
         menu.addItem(quitItem)
         statusItem?.menu = menu
-    }
-
-    /// 把 HotKey 显示为菜单项右侧的系统快捷键样式。
-    private static func applyKeyEquivalent(_ hotKey: HotKey?, to item: NSMenuItem) {
-        guard let hotKey, let character = keyEquivalentCharacter(for: hotKey.keyCode) else { return }
-        item.keyEquivalent = character
-        item.keyEquivalentModifierMask = hotKey.modifierFlags
-    }
-
-    private static func keyEquivalentCharacter(for keyCode: UInt32) -> String? {
-        let special: [UInt32: Int] = [
-            36: 0x0D, 48: 0x09, 49: 0x20, 51: 0x08, 53: 0x1B, 117: 0x7F,
-            123: NSLeftArrowFunctionKey, 124: NSRightArrowFunctionKey,
-            125: NSDownArrowFunctionKey, 126: NSUpArrowFunctionKey,
-            115: NSHomeFunctionKey, 119: NSEndFunctionKey,
-            116: NSPageUpFunctionKey, 121: NSPageDownFunctionKey,
-            122: NSF1FunctionKey, 120: NSF2FunctionKey, 99: NSF3FunctionKey, 118: NSF4FunctionKey,
-            96: NSF5FunctionKey, 97: NSF6FunctionKey, 98: NSF7FunctionKey, 100: NSF8FunctionKey,
-            101: NSF9FunctionKey, 109: NSF10FunctionKey, 103: NSF11FunctionKey, 111: NSF12FunctionKey,
-            105: NSF13FunctionKey, 107: NSF14FunctionKey, 113: NSF15FunctionKey, 106: NSF16FunctionKey,
-            64: NSF17FunctionKey, 79: NSF18FunctionKey, 80: NSF19FunctionKey, 90: NSF20FunctionKey
-        ]
-        if let scalar = special[keyCode].flatMap({ UnicodeScalar($0) }) {
-            return String(Character(scalar))
-        }
-        let name = HotKeyFormatter.keyName(for: keyCode)
-        return name.count == 1 ? name.lowercased() : nil
     }
 
     func menuWillOpen(_ menu: NSMenu) {
