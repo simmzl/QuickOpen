@@ -5,6 +5,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-11-12
+
+### Changed
+- **Redesigned shortcut list.** Apps sit in a grouped list like System Settings, grouped by modifier combination and sorted by key (switch to *Custom Order* to drag rows). Shortcuts are shown as keycaps — click one to record a new shortcut. The bundle ID is replaced by a running / not running status (hover a row to see it), and Remove, Preview and Show in Finder move into a "⋯" menu that appears on hover.
+- **Menu bar menu:** each app shows its shortcut as a keycap on the right, so you see — and remember — which key opens which app. Apps follow the same order as the settings list.
+- New pill-style switches for List / Keyboard and By Key / Custom Order, a prominent **Add App** button, and roomier spacing in the Shortcuts tab.
+- README: refreshed screenshots, plus a menu bar screenshot.
+
+### Fixed
+- Opening Settings or switching tabs no longer puts a focus ring on the first button or link.
+
 ## [1.4.0] - 2026-11-11
 
 ### Added
@@ -85,7 +96,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - Initial release.
 
-[Unreleased]: https://github.com/simmzl/QuickOpen/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/simmzl/QuickOpen/compare/v1.4.1...HEAD
+[1.4.1]: https://github.com/simmzl/QuickOpen/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/simmzl/QuickOpen/compare/v1.3.2...v1.4.0
 [1.3.2]: https://github.com/simmzl/QuickOpen/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/simmzl/QuickOpen/compare/v1.3.0...v1.3.1
