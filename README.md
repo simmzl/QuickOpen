@@ -21,6 +21,10 @@
 </p>
 
 <p align="center">
+  🌐 <a href="https://quickopen.simmzl.cn">quickopen.simmzl.cn</a>
+</p>
+
+<p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/keyboard-en-dark.png">
     <img src="docs/images/keyboard-en.png" width="900" alt="Keyboard view: Claude, ChatGPT, DeepSeek Harness, Figma and Chrome sit on the F1–F5 keycaps, Notion on ⇧⌘N and Muse on ⇧⌘M">
