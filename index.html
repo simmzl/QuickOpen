@@ -68,6 +68,8 @@ button,[role="button"],summary,a.btn{min-height:44px}
 .btn-amber{background:linear-gradient(180deg,#FFA63D,#F97316);color:#fff;box-shadow:0 8px 20px -8px rgba(249,115,22,.65)}
 .btn-amber:hover{background:linear-gradient(180deg,#FF9A26,#EA580C)}
 .btn-sm{padding:8px 15px;font-size:14px;border-radius:10px;min-height:40px}
+@media(max-width:960px){ .nav-links{margin-left:4px;gap:0} .nav-links a{padding:9px 7px;font-size:14px} .nav-links a[href="#faq"]{display:none} }
+@media(max-width:360px){ .nav-right .btn-sm span{display:none} .nav-right .btn-sm{padding:8px 11px} }
 @media(max-width:760px){ .nav-links{display:none} .nav-in{gap:6px;padding:0 12px} .brand{font-size:16.5px;flex:none} .brand img{width:29px;height:29px} .nav-right{flex:none;gap:6px} .nav-right .icon-btn{display:none} .lang-switch button{padding:5px 9px;font-size:12.5px} .nav-right .btn-sm{padding:8px 12px;font-size:13.5px} }
 
 /* ---------- hero ---------- */
@@ -126,6 +128,7 @@ section{padding:74px 0 8px}
 .split{display:grid;grid-template-columns:1fr 1.25fr;gap:36px;align-items:center}
 @media(max-width:900px){.split{grid-template-columns:1fr}}
 .split.rev{grid-template-columns:1.25fr 1fr}
+.split>*,.grid3>*,.steps>*,.stats>*,.mode-cards>*,.mini-row>*{min-width:0}
 @media(max-width:900px){.split.rev{grid-template-columns:1fr}}
 .shot{border-radius:var(--radius);border:1px solid var(--line);box-shadow:var(--shadow);overflow:hidden;background:#111}
 .shot img{width:100%}
@@ -155,8 +158,9 @@ section{padding:74px 0 8px}
 .stat{border:1px solid var(--dark-line);border-radius:16px;padding:18px;background:var(--dark2)}
 .stat .big{font-size:27px;font-weight:800;letter-spacing:-.02em;color:#FFC46B}
 .stat .lbl{font-size:13.5px;color:var(--dark-ink2);margin-top:3px;line-height:1.45}
-.codeblock{background:#14100A;color:#F3E9D7;border-radius:14px;padding:16px 18px;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:13.5px;line-height:1.65;overflow-x:auto;position:relative;border:1px solid #2C2314}
-.codeblock pre{margin:0;white-space:pre}
+.codeblock{background:#14100A;color:#F3E9D7;border-radius:14px;padding:0;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:13.5px;line-height:1.65;overflow:hidden;position:relative;border:1px solid #2C2314}
+.codeblock pre{margin:0;padding:16px 18px;white-space:pre;overflow-x:auto;-webkit-overflow-scrolling:touch;font:inherit}
+@media(max-width:600px){ .codeblock{font-size:12px} .codeblock pre{padding:54px 14px 14px} }
 .copy-btn{position:absolute;top:10px;right:10px;background:#2A2113;color:#EDE4D3;border:1px solid #453823;border-radius:9px;padding:7px 11px;font-size:12.5px;font-weight:700;cursor:pointer;display:inline-flex;gap:6px;align-items:center;min-height:36px;font-family:inherit}
 .copy-btn svg{width:14px;height:14px}
 details{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:4px 20px;margin-bottom:10px}
