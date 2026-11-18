@@ -21,6 +21,10 @@
 </p>
 
 <p align="center">
+  🌐 官网 <a href="https://quickopen.simmzl.cn">quickopen.simmzl.cn</a>
+</p>
+
+<p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/keyboard-zh-dark.png">
     <img src="docs/images/keyboard-zh.png" width="900" alt="键盘视图：Claude、ChatGPT、DeepSeek Harness、Figma、Chrome 分别落在 F1–F5 键帽上，Notion 和 Muse 分别绑定 ⇧⌘N、⇧⌘M">
